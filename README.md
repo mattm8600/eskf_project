@@ -1,0 +1,1 @@
+This is my attempt at creating an error state kalman filter. Currently just uploading it so I can keep the files for later, since I feel like it's pretty close to working. Will definitely work on it later.

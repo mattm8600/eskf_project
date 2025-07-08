@@ -1,0 +1,25 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Build ESKF Test",
+      "type": "shell",
+      "command": "/usr/bin/g++",
+      "args": [
+        "-g",
+        "${workspaceFolder}/testing/main.cpp",
+        "${workspaceFolder}/eskf/eskf.cpp",
+        "-I${workspaceFolder}/eskf",
+        "-I${workspaceFolder}/eskf/Eigen",
+        "-o",
+        "${workspaceFolder}/testing/main"
+      ],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": ["$gcc"],
+      "detail": "Build ESKF test runner and library"
+    }
+  ]
+}

@@ -3,20 +3,21 @@ import pandas as pd
 from IPython.display import display
 import matplotlib.pyplot as plt
 
-csv_file_path = "new_troubleshooting.csv"
+csv_file_path = "square_flight_results.csv"
 df = pd.read_csv(csv_file_path)
-input_df = pd.read_csv("all_sensors.csv")
+input_df = pd.read_csv("squareflightdataset.csv")
+input_df = input_df.replace(-9999999.00, np.nan)
+input_df['time'] = input_df['time']/(1e6)
 mean_input_gyr = input_df[["gyrx","gyry","gyrz"]].mean()
 mean_input_gyr = mean_input_gyr * (np.pi/180)
 mean_input_acc = input_df[["ax","ay","az"]].mean()
 display(mean_input_acc)
 display(mean_input_gyr)
 mean_acceleration = df[["ax_hat", "ay_hat", "az_hat"]].mean()
-df["yaw_unwrapped"] = np.unwrap(df["yaw"].values)
-df["pitch_unwrapped"] = np.unwrap(df["pitch"].values)
-df["roll_unwrapped"] = np.unwrap(df["roll"].values)
+# pd.set_option('display.max_columns', None)
+# row = df[df["time"] == 186686]
 
-
+# print(row)
 
 # time,x_hat,y_hat,z_hat,Vx_hat,Vy_hat,Vz_hat,ax_hat,ay_hat,az_hat
 fig, axes = plt.subplots(4, 1, figsize=(30, 20))
@@ -66,22 +67,21 @@ plt.show()
 # axes[1].legend(fontsize=12)
 # plt.show()
 
-# Compare gyro bias and acceleration:
+# Compare gyro bias and gyro:
 fig, axes = plt.subplots(2, 1, figsize=(24, 20))
 axes[0].plot(df["time"], df["gx_bias"], label="gx_bias")
 axes[0].plot(df["time"], df["gy_bias"], label="gy_bias")
 axes[0].plot(df["time"], df["gz_bias"], label="gz_bias")
-axes[1].plot(df["time"], df["gx_bias"], label="gx_bias")
-axes[1].plot(df["time"], df["gy_bias"], label="gy_bias")
-axes[1].plot(df["time"], df["gz_bias"], label="gz_bias")
+axes[1].plot(input_df["time"], input_df["gyrx"], label="gyr_x")
+axes[1].plot(input_df["time"], input_df["gyry"], label="gyr_y")
+axes[1].plot(input_df["time"], input_df["gyrz"], label="gyr_z")
 axes[0].grid(True, which='both', linestyle='--', linewidth=0.5)
 axes[1].grid(True, which='both', linestyle='--', linewidth=0.5)
-axes[0].set_title("Acceleration Bias vs Time (s)")
-axes[1].set_title("Predicted Acceleration vs Time (s)")
+axes[0].set_title("Gyro Bias vs Time (s)")
+axes[1].set_title("Input gyro vs Time (s)")
 axes[0].legend(fontsize=12)
 axes[1].legend(fontsize=12)
 plt.show()
-
 
 # Compare Yaw in vs Yaw out
 # fig, axes = plt.subplots(2, 1, figsize=(24, 20))
@@ -111,3 +111,39 @@ axes[0].legend(fontsize=12)
 axes[1].legend(fontsize=12)
 axes[2].legend(fontsize=12)
 plt.show()
+
+
+# INPUT:
+fig, axes = plt.subplots(4, 1, figsize=(30, 20))
+axes[0].plot(input_df["time"], input_df["gps_x"], '.', label="GPS x")
+axes[0].plot(input_df["time"], input_df["gps_y"], '.', label="GPS y")
+axes[0].plot(input_df["time"], input_df["gps_z"], '.', label="GPS z")
+axes[0].plot(input_df["time"], input_df["baro"], label="Baro z")
+
+axes[1].plot(input_df["time"], input_df["gyrx"], label="gyr_x")
+axes[1].plot(input_df["time"], input_df["gyry"], label="gyr_y")
+axes[1].plot(input_df["time"], input_df["gyrz"], label="gyr_z")
+
+axes[2].plot(input_df["time"], input_df["ax"], label="ax")
+axes[2].plot(input_df["time"], input_df["ay"], label="ay")
+axes[2].plot(input_df["time"], input_df["az"], label="az")
+
+axes[3].plot(input_df["time"], input_df["heading"], label="Mag heading")
+
+axes[0].grid(True, which='both', linestyle='--', linewidth=0.5)
+axes[1].grid(True, which='both', linestyle='--', linewidth=0.5)
+axes[2].grid(True, which='both', linestyle='--', linewidth=0.5)
+axes[3].grid(True, which='both', linestyle='--', linewidth=0.5)
+axes[0].set_title("Position vs Time (s)")
+axes[1].set_title("Angular Velocity vs Time (s)")
+axes[2].set_title("Acceleration vs Time (s)")
+axes[3].set_title("Heading vs Time (s)")
+
+
+axes[0].legend(fontsize=12)
+axes[1].legend(fontsize=12)
+axes[2].legend(fontsize=12)
+axes[3].legend(fontsize=12)
+plt.show()
+
+# Estimated Heading vs Model's Heading

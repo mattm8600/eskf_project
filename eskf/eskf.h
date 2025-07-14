@@ -34,11 +34,14 @@ class eskf{
         // Are there new GPS, Baro, Magnetometer Readings?
         bool new_mag;
         bool new_gps;
+        bool takeoff = false;
 
 
         // IMU Measurements
         Eigen::Vector3f acc_meas;
         Eigen::Vector3f gyro_meas;
+        Eigen::Vector3f omega_filtered = Eigen::Vector3f::Zero();
+        float gyr_alpha = 0.1f;
         
         // GPS, Baro, magnetometer Measurements
         float gps_x;
@@ -58,13 +61,13 @@ class eskf{
         State nom_state;
 
         // White noise densities (from BMI270 datasheet)
-        float sigma_a_n = 0.001569; // m/s^2 / sqrt(Hz)
-        float sigma_w_n = 0.0001222; // rad/s / sqrt(Hz)
-
+        float sigma_a_n = 0.04; // m/s^2 / sqrt(Hz)
+        // float sigma_w_n = 0.0001222; // rad/s / sqrt(Hz)
+        float sigma_w_n = 0.05f;
         // Random walk (Estimated from ChatGPT)
-        float sigma_a_w = 5e-4; // m/s^2 / sqrt(s)
-        float sigma_w_w = 5e-5; // rad/s / sqrt(s)
-
+        float sigma_a_w = 5e-3f; // m/s^2 / sqrt(s)
+        // float sigma_w_w = 5e-5; // rad/s / sqrt(s)
+        float sigma_w_w = 1e-3f;
         // Sensor Noise
 
         // GPS Noise is already in one std dev units, taken directly from the GPS
@@ -74,11 +77,11 @@ class eskf{
         float baro_noise = 0.005f; // Approximate error of +- .005m
         float baro_dev_tol = 3.0f;
         float mag_noise = 0.05f*0.05f; // Taken from .32 microT and .41microT noise from sheet
-        float predicted_grav_noise = 0.5f;
+        float predicted_grav_noise = 0.01f;
 
         // DEBUG
         float y_yaw = 0.0;
-
+        float yaw_pred = 0.0;
 
         eskf();
         bool update(bool new_baro, bool new_gps, bool new_mag);

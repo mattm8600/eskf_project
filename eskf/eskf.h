@@ -42,6 +42,7 @@ class eskf{
         Eigen::Vector3f gyro_meas;
         Eigen::Vector3f omega_filtered = Eigen::Vector3f::Zero();
         float gyr_alpha = 0.1f;
+        float theta_cov_infl = 1.01f;
         
         // GPS, Baro, magnetometer Measurements
         float gps_x;
@@ -49,7 +50,7 @@ class eskf{
         float gps_z;
 
 
-        // DENIBUG
+        // DEBUG
         Eigen::Matrix<float,15,1> error_pred;
         Eigen::Vector3f acc_ned;
         // TODO: Incorporate GPS yaw control
@@ -61,14 +62,13 @@ class eskf{
         State nom_state;
 
         // White noise densities (from BMI270 datasheet)
-        float sigma_a_n = 0.04; // m/s^2 / sqrt(Hz)
+        float sigma_a_n = 0.01; // m/s^2 / sqrt(Hz)
         // float sigma_w_n = 0.0001222; // rad/s / sqrt(Hz)
-        float sigma_w_n = 0.05f;
+        float sigma_w_n = 0.04f;
         // Random walk (Estimated from ChatGPT)
-        float sigma_a_w = 5e-3f; // m/s^2 / sqrt(s)
+        float sigma_a_w = 1e-3f; // m/s^2 / sqrt(s)
         // float sigma_w_w = 5e-5; // rad/s / sqrt(s)
-        float sigma_w_w = 1e-3f;
-        // Sensor Noise
+        float sigma_w_w = 5e-4f;
 
         // GPS Noise is already in one std dev units, taken directly from the GPS
         float gps_hAcc;
@@ -77,7 +77,7 @@ class eskf{
         float baro_noise = 0.005f; // Approximate error of +- .005m
         float baro_dev_tol = 3.0f;
         float mag_noise = 0.05f*0.05f; // Taken from .32 microT and .41microT noise from sheet
-        float predicted_grav_noise = 0.01f;
+        float predicted_grav_noise = 1.01f;
 
         // DEBUG
         float y_yaw = 0.0;
@@ -89,6 +89,7 @@ class eskf{
         float getPitch();
         float getRoll();
         float getYaw();
+        float wrapToPi(float angle);
     private:
         void predict_covariance(Eigen::Matrix3f R, Eigen::Matrix3f acc_skew);
         void predict_state();
@@ -96,7 +97,5 @@ class eskf{
         Eigen::Matrix3f skewSymmetric(const Eigen::Vector3f& v);
         Eigen::Vector3f g;
         Eigen::Vector3f B_ned;
-        float wrapToPi(float angle);
-
 };
 #endif

@@ -15,7 +15,7 @@ int main() {
     bool first_run = true;
     fstream FileIn("squareflightdataset.csv");
     fstream FileOut("square_flight_results.csv");
-    FileOut << "time,x_hat,y_hat,z_hat,Vx_hat,Vy_hat,Vz_hat,ax_hat,ay_hat,az_hat,ax_bias,ay_bias,az_bias,gx_bias,gy_bias,gz_bias,roll,pitch,yaw, est_heading" << std::endl;
+    FileOut << "time,x_hat,y_hat,z_hat,Vx_hat,Vy_hat,Vz_hat,ax_hat,ay_hat,az_hat,ax_bias,ay_bias,az_bias,gx_bias,gy_bias,gz_bias,roll,pitch,yaw,est_heading" << std::endl;
     std::string line;
     getline(FileIn, line);
     eskf kf = eskf();
@@ -78,7 +78,6 @@ int main() {
         }
         std::getline(ss, value, ',');
         time = stof(value) / (powf(10,6));
-        cout << "Time: " << time << "\n";
         kf.acc_meas = acc;
         kf.gyro_meas = gyr;
         if(use_gps) {
@@ -89,7 +88,8 @@ int main() {
             kf.gps_vAcc = gps(4);
         }
         if(use_mag) {
-            kf.mag_heading = mag(0)*(M_PI/180);
+            kf.mag_heading = mag(0)*(M_PI/180); // Assumes heading given in degrees, must wrap to +- pi
+            kf.mag_heading = kf.wrapToPi(kf.mag_heading);
             kf.mag_vec = Eigen::Vector3f(mag(1),mag(2),mag(3));
         }
         if(first_run) { // ASSUMES LEAVING THE GROUND, For other start point reference GPS change
@@ -113,8 +113,8 @@ int main() {
             first_run = false;
         }
         kf.update(use_baro,use_gps,use_mag);
-        // Eigen::Vector3f rotated_acc = kf.nom_state.q.toRotationMatrix() * (kf.acc_meas);
-        // std::cout << rotated_acc(2) << " " << kf.nom_state.acc_b(2) << " " << kf.acc_ned(2) << "\n";
+        // cout << "Time: " << time << "\n";
+        cout << "Time: " << time << ", Norm of P theta " << kf.P(6,6) << ", " << kf.P(7,7) << ", " << kf.P(8,8) << "\n";
         // printEigen(kf.nom_state.q.toRotationMatrix(), "Quaternion");
         use_baro = false;
         use_gps = false;

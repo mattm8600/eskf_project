@@ -41,8 +41,9 @@ class eskf{
         Eigen::Vector3f acc_meas;
         Eigen::Vector3f gyro_meas;
         Eigen::Vector3f omega_filtered = Eigen::Vector3f::Zero();
-        float gyr_alpha = 0.1f;
-        float theta_cov_infl = 1.01f;
+        float gyr_alpha = 0.9f;
+        float pr_cov_infl = 1.1f;
+        float yaw_cov_infl = 1.1f;
         
         // GPS, Baro, magnetometer Measurements
         float gps_x;
@@ -53,35 +54,53 @@ class eskf{
         // DEBUG
         Eigen::Matrix<float,15,1> error_pred;
         Eigen::Vector3f acc_ned;
+
+
+
         // TODO: Incorporate GPS yaw control
         float baro_meas;
         float mag_heading;
         Eigen::Vector3f mag_vec;
+        Eigen::Vector3f filtered_mag_vec = Eigen::Vector3f::Zero();
+        float mag_vec_alpha = 0.9f;
         
         // States
         State nom_state;
 
+        // BEFORE TAKEOFF NOISE
+        // // White noise densities (from BMI270 datasheet)
+        // float sigma_a_n = 0.0018; // m/s^2 / sqrt(Hz)
+        // // float sigma_w_n = 0.0001222; // rad/s / sqrt(Hz)
+        // float sigma_w_n = 0.001f;
+        // // Random walk (Estimated from ChatGPT)
+        // float sigma_a_w = 1e-5f; // m/s^2 / sqrt(s)
+        // float sigma_w_w = 5e-4f;
+
+        // AFTER TAKEOFF NOISE
         // White noise densities (from BMI270 datasheet)
-        float sigma_a_n = 0.01; // m/s^2 / sqrt(Hz)
+        float sigma_a_n = 0.05f; // m/s^2 / sqrt(Hz)
         // float sigma_w_n = 0.0001222; // rad/s / sqrt(Hz)
-        float sigma_w_n = 0.04f;
+        float sigma_w_n = 0.01f;
         // Random walk (Estimated from ChatGPT)
-        float sigma_a_w = 1e-3f; // m/s^2 / sqrt(s)
-        // float sigma_w_w = 5e-5; // rad/s / sqrt(s)
+        float sigma_a_w = 1e-4f; // m/s^2 / sqrt(s)
         float sigma_w_w = 5e-4f;
+
+
 
         // GPS Noise is already in one std dev units, taken directly from the GPS
         float gps_hAcc;
         float gps_vAcc;
         // From baro datasheet
-        float baro_noise = 0.005f; // Approximate error of +- .005m
+        float baro_noise = 0.1f; // Approximate error of +- .005m
         float baro_dev_tol = 3.0f;
         float mag_noise = 0.05f*0.05f; // Taken from .32 microT and .41microT noise from sheet
-        float predicted_grav_noise = 1.01f;
+        float predicted_grav_noise = 0.1f;
 
         // DEBUG
         float y_yaw = 0.0;
         float yaw_pred = 0.0;
+        bool mag_used = false;
+        bool pr_used = false;
 
         eskf();
         bool update(bool new_baro, bool new_gps, bool new_mag);

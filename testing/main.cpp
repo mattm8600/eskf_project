@@ -115,6 +115,7 @@ int main() {
             first_run = false;
         }
         kf.deltaT = time - t_0;
+        cout << "Time Delta: " << kf.deltaT << "\n";
         // std::cout << kf.deltaT << "\n";
         kf.update(use_baro,use_gps,use_mag);
         t_0 = time;

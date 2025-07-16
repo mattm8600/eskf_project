@@ -15,11 +15,12 @@ int main() {
     bool first_run = true;
     fstream FileIn("squareflightdataset.csv");
     fstream FileOut("square_flight_results.csv");
-    FileOut << "time,x_hat,y_hat,z_hat,Vx_hat,Vy_hat,Vz_hat,ax_hat,ay_hat,az_hat,ax_bias,ay_bias,az_bias,gx_bias,gy_bias,gz_bias,roll,pitch,yaw,est_heading" << std::endl;
+    FileOut << "time,x_hat,y_hat,z_hat,Vx_hat,Vy_hat,Vz_hat,ax_hat,ay_hat,az_hat,ax_bias,ay_bias,az_bias,gx_bias,gy_bias,gz_bias,roll,pitch,yaw,est_heading,mag_correction,pr_correction" << std::endl;
     std::string line;
     getline(FileIn, line);
     eskf kf = eskf();
     float time = 0;
+    float t_0 = 0;
     bool use_baro = false;
     bool use_mag = false;
     bool use_gps = false;
@@ -79,7 +80,7 @@ int main() {
         std::getline(ss, value, ',');
         time = stof(value) / (powf(10,6));
         kf.acc_meas = acc;
-        kf.gyro_meas = gyr;
+        kf.gyro_meas = gyr*(1/16.4);
         if(use_gps) {
             kf.gps_x = gps(0);
             kf.gps_y = gps(1);
@@ -93,6 +94,7 @@ int main() {
             kf.mag_vec = Eigen::Vector3f(mag(1),mag(2),mag(3));
         }
         if(first_run) { // ASSUMES LEAVING THE GROUND, For other start point reference GPS change
+            t_0 = time;
             kf.nom_state.p = Eigen::Vector3f(0,0,0.05);
             kf.nom_state.vel = Eigen::Vector3f(0,0,0);
             // Eigen::Quaternionf q_init(1, 0, 0, 0);
@@ -112,15 +114,14 @@ int main() {
             printEigen(q_init.toRotationMatrix(), "Initial Rotation");
             first_run = false;
         }
+        kf.deltaT = time - t_0;
+        // std::cout << kf.deltaT << "\n";
         kf.update(use_baro,use_gps,use_mag);
-        // cout << "Time: " << time << "\n";
-        cout << "Time: " << time << ", Norm of P theta " << kf.P(6,6) << ", " << kf.P(7,7) << ", " << kf.P(8,8) << "\n";
-        // printEigen(kf.nom_state.q.toRotationMatrix(), "Quaternion");
-        use_baro = false;
-        use_gps = false;
-        use_mag = false;
+        t_0 = time;
+        cout << "Time: " << time << " ";
+        // cout << "Time: " << time << ", Norm of P theta " << kf.P(6,6) << ", " << kf.P(7,7) << ", " << kf.P(8,8) << "\n";
+        // printEigen(kf.P, "Covaraince Matrix");
         FileOut << time;
-        time = time + 0.05;
         for (size_t i = 0; i < 3; ++i) {
             FileOut << ",";
             FileOut << kf.nom_state.p[i];
@@ -141,7 +142,12 @@ int main() {
         FileOut << "," << kf.getPitch();
         FileOut << "," << kf.getYaw();
         FileOut << "," << kf.yaw_pred;
+        FileOut << "," << kf.mag_used;
+        FileOut << "," << kf.pr_used;
         FileOut << "\n";
+        use_baro = false;
+        use_gps = false;
+        use_mag = false;
     }
 
     FileIn.close();

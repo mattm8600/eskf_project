@@ -15,7 +15,7 @@ int main() {
     bool first_run = true;
     fstream FileIn("squareflightdataset.csv");
     fstream FileOut("square_flight_results.csv");
-    FileOut << "time,x_hat,y_hat,z_hat,Vx_hat,Vy_hat,Vz_hat,ax_hat,ay_hat,az_hat,ax_bias,ay_bias,az_bias,gx_bias,gy_bias,gz_bias,roll,pitch,yaw,est_heading,mag_correction,pr_correction" << std::endl;
+    FileOut << "time,x_hat,y_hat,z_hat,Vx_hat,Vy_hat,Vz_hat,ax_hat,ay_hat,az_hat,ax_bias,ay_bias,az_bias,gx_bias,gy_bias,gz_bias,roll,pitch,yaw,est_heading,mag_correction,pr_correction,P_trace" << std::endl;
     std::string line;
     getline(FileIn, line);
     eskf kf = eskf();
@@ -145,6 +145,7 @@ int main() {
         FileOut << "," << kf.yaw_pred;
         FileOut << "," << kf.mag_used;
         FileOut << "," << kf.pr_used;
+        FileOut << "," << kf.P.trace();
         FileOut << "\n";
         use_baro = false;
         use_gps = false;

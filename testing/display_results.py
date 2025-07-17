@@ -8,7 +8,7 @@ df = pd.read_csv(csv_file_path)
 input_df = pd.read_csv("squareflightdataset.csv")
 input_df = input_df.replace(-9999999.00, np.nan)
 input_df['time'] = input_df['time']/(1e6)
-input_df[["gyrx","gyry","gyrz"]] = input_df[["gyrx","gyry","gyrz"]]*(1/16.4)*(np.pi/180)
+input_df[["gyrx","gyry","gyrz"]] = input_df[["gyrx","gyry","gyrz"]]*(1/16.4)
 mean_input_acc = input_df[["ax","ay","az"]].mean()
 display(mean_input_acc)
 mean_acceleration = df[["ax_hat", "ay_hat", "az_hat"]].mean()
@@ -21,7 +21,7 @@ input_df['mag_norm'] = np.sqrt(input_df['mag_x']*input_df['mag_x'] + input_df['m
 # print(row)
 
 # time,x_hat,y_hat,z_hat,Vx_hat,Vy_hat,Vz_hat,ax_hat,ay_hat,az_hat
-fig, axes = plt.subplots(3, 1, figsize=(30, 20))
+fig, axes = plt.subplots(4, 1, figsize=(30, 20))
 axes[0].plot(df["time"], df["x_hat"], label="x_hat")
 axes[0].plot(df["time"], df["y_hat"], label="y_hat")
 axes[0].plot(df["time"], df["z_hat"], label="z_hat")
@@ -33,6 +33,8 @@ axes[1].plot(df["time"], df["Vz_hat"], label="Vz_hat")
 axes[2].plot(df["time"], df["ax_hat"], label="ax_hat")
 axes[2].plot(df["time"], df["ay_hat"], label="ay_hat")
 axes[2].plot(df["time"], df["az_hat"], label="az_hat")
+
+axes[3].plot(df['time'], df['P_trace'], label="Cov. Trace")
 
 axes[0].grid(True, which='both', linestyle='--', linewidth=0.5)
 axes[1].grid(True, which='both', linestyle='--', linewidth=0.5)

@@ -91,6 +91,7 @@ void eskf::predict_covariance(Eigen::Matrix3f R, Eigen::Matrix3f acc_skew) {
     Qi.block<3,3>(9, 9) = powf(sigma_w_w,2.0f)*deltaT*Eigen::Matrix3f::Identity();  
     // Update Covariance matrix (P)
     P = Fx*P*Fx.transpose() + Fi*Qi*Fi.transpose();
+    // std::cout << P << "\n";
 }
 
 // TODO: Setup system where barometer and GPS measurements are updated continuously, once gotten call this fn
@@ -98,93 +99,64 @@ void eskf::predict_covariance(Eigen::Matrix3f R, Eigen::Matrix3f acc_skew) {
 // Note: Both the GPS and Barometer have linear sensor models. Therefore we don't need to get super fancy with the jacobian math here
 eskf::State eskf::fuse_sensors(bool new_mag, bool new_baro, bool new_gps) {
 
-    /*
-        Currently GPS horizontal positon, GPS vertical position, and barometer vertical position are implemented
-        TODO: GPS Velocity (Is there even error?), Magnetometer (Bomboclat, might have to add in a)
-    
-    */
-
-    if(new_gps) {
-        Eigen::Matrix<float,3,15> H_gps;
-        H_gps.setZero();
-        H_gps.block<3,3>(0,0) = Eigen::Matrix3f::Identity();
-        Eigen::Matrix<float,3,3> V_gps = Eigen::Matrix<float,3,3>::Zero();
-        // TODO: Model the accuracies as an estimated 1-sigma standard dev, ensure unit is meters
-        V_gps(0,0) = std::max(gps_hAcc*gps_hAcc, 1.0f);  // at least 1 m²
-        V_gps(1,1) = std::max(gps_hAcc*gps_hAcc, 1.0f);
-        V_gps(2,2) = std::max(gps_vAcc*gps_vAcc, 2.0f);  // z often noisier
-        // Calculate GPS Kalman Gain
-        Eigen::Matrix<float,15,3> K_gps = P * H_gps.transpose() * (H_gps*P*H_gps.transpose()+V_gps).ldlt().solve(Eigen::Matrix<float,3,3>::Identity());
-        K_gps.block<3,3>(9,0).setZero();   // acc_b
-        K_gps.block<3,3>(12,0).setZero();  // gyro_b
-        K_gps.block<3,3>(6,0).setZero();  // gyro_b
-        // std::cout << K_gps.norm() << "\n";
-        Eigen::Vector3f gps_vec(gps_x,gps_y,gps_z);
-        Eigen::Vector3f y_gps = gps_vec-nom_state.p;
-        // Calculate observed error
-        error_pred = K_gps*(y_gps);
-        // std::cout << "GPS residual: " << y_gps(0) << ", " << y_gps(1) << ", " << y_gps(2) << ", Gps error prediction: " << error_pred(0) << ", " << error_pred(1) << ", " << error_pred(2) << ", hAcc: "
-        // << gps_hAcc << ", vAcc" << gps_vAcc << ", K Gain Norm: " << K_gps.norm() << "\n";
-        // // Update Covariance matrix
-        P = (Eigen::Matrix<float,15,15>::Identity()-K_gps*H_gps)*P*(Eigen::Matrix<float,15,15>::Identity()-K_gps*H_gps).transpose() + K_gps*V_gps*K_gps.transpose();
-        // Inject observed error into state
-        nom_state.p = nom_state.p + error_pred.segment<3>(0);
-        nom_state.vel = nom_state.vel + error_pred.segment<3>(3);
-        Eigen::Vector3f d_theta = error_pred.segment<3>(6);
-        Eigen::Quaternionf dq;
-        float theta = d_theta.norm();
-        if (theta > 1e-5f) {
-            dq = Eigen::AngleAxisf(theta, d_theta.normalized());
-        } else {
-            dq = Eigen::Quaternionf(1, d_theta(0)/2.0f, d_theta(1)/2.0f, d_theta(2)/2.0f);  // first-order
-        }
-        nom_state.q = (dq * nom_state.q).normalized();
-        nom_state.acc_b = nom_state.acc_b + error_pred.segment<3>(9);
-        nom_state.gyro_b = nom_state.gyro_b + error_pred.segment<3>(12);
-    }
-
-    // TODO: Implement something to not use barometer when it sucks (ie when GPS height is less than 1 don't use baro)
-    if(new_baro) {
-        Eigen::Matrix<float,1,15> H_baro = Eigen::Matrix<float,1,15>::Zero();
-        H_baro(0,2) = 1.0f;
-        Eigen::Matrix<float,1,1> V_baro =  Eigen::Matrix<float,1,1>::Constant(baro_noise);
-        // Calculate the Kalman gain of the barometer
-        float S = (H_baro * P * H_baro.transpose())(0,0) + V_baro(0,0);
-        Eigen::Matrix<float,15,1> K_baro = P * H_baro.transpose() / S;
-        K_baro.segment<3>(12).setZero();
-        K_baro.segment<3>(6).setZero();
-        // TODO: Figure out what Kalman gains to zero out from ekf2 (probably everything x,y related, q, gyro)
-        float y_baro = baro_meas-nom_state.p(2);
-        // Make sure that the barometer reading is in reasonable error range, if not don't use it (Disabled for now)
-        // if((S>V_baro(0,0))&& fabs(y_baro) < baro_dev_tol*sqrtf(S)) {
-            // Calculate our observed error of the barometer
-            Eigen::Matrix<float,15,1> error_pred = K_baro*(y_baro);
-            // Update Covariance matrix
-            P = (Eigen::Matrix<float,15,15>::Identity()-K_baro*H_baro)*P*(Eigen::Matrix<float,15,15>::Identity()-K_baro*H_baro).transpose() + K_baro*V_baro*K_baro.transpose();
-            // Inject observed error into the nominal state
-            nom_state.p = nom_state.p + error_pred.segment<3>(0);
-            nom_state.vel = nom_state.vel + error_pred.segment<3>(3);
-            Eigen::Vector3f d_theta = error_pred.segment<3>(6);
-            Eigen::Quaternionf dq;
-            float theta = d_theta.norm();
-            if (theta > 1e-5f) {
-                dq = Eigen::AngleAxisf(theta, d_theta.normalized());
-            } else {
-                dq = Eigen::Quaternionf(1, d_theta(0)/2.0f, d_theta(1)/2.0f, d_theta(2)/2.0f);  // first-order
-            }
-            nom_state.q = (dq * nom_state.q).normalized();
-            nom_state.acc_b = nom_state.acc_b + error_pred.segment<3>(9);
-            nom_state.gyro_b = nom_state.gyro_b + error_pred.segment<3>(12);
-        // }
-    }
-
     bool used_grav = false;
     Eigen::Vector3f d_theta_mag = Eigen::Vector3f::Zero();
     Eigen::Vector3f d_theta_grav = Eigen::Vector3f::Zero();
     Eigen::Vector3f gyro_grav = Eigen::Vector3f::Zero();
     Eigen::Vector3f gyro_mag = Eigen::Vector3f::Zero();
 
-    // TODO: Implement a measure to not use the magnetometer when it sucks
+    // Use the measured gravity to correct pitch and roll:
+    float acc_norm = (acc_meas - nom_state.acc_b).norm();
+    // std::cout << acc_norm << "\n";
+    float angle = acosf((acc_meas-nom_state.acc_b).normalized().dot(nom_state.q.toRotationMatrix().transpose()*g.normalized()));
+    // std::cout << "Angle: " << angle << ", Acc Norm: " << acc_norm << "\n";
+    if (fabsf(angle) < .175 || (acc_norm >= 9.0f && acc_norm <= 10.5f) ) {
+        used_grav = true;
+        // std::cout << "Correcting Pitch Roll" << "\n";
+        nom_state.q.normalize();
+        Eigen::Matrix3f R = nom_state.q.toRotationMatrix();
+        Eigen::Vector3f grav_pred = R.transpose()*g;
+        // std::cout << grav_pred(2);
+        Eigen::Matrix<float,3,15> H_grav = Eigen::Matrix<float,3,15>::Zero();
+        H_grav.block<3,3>(0,6) = skewSymmetric(grav_pred);
+        Eigen::Vector3f grav_meas = (acc_meas - nom_state.acc_b).normalized() * 9.81f;
+        // std::cout << " " << grav_meas(2) << "\n";
+        Eigen::Matrix3f R_grav = predicted_grav_noise * Eigen::Matrix3f::Identity();
+
+        Eigen::Vector3f y_grav = grav_pred-grav_meas;
+        // std::cout << "Grav correction Residual" << y_grav << "\n";
+        // std::cout << "Grav residual " << y_grav.norm();
+        Eigen::Matrix3f S = H_grav * P * H_grav.transpose() + R_grav;
+        // Apply Mahalanobis Gating
+        float d2 = y_grav.transpose()*S.inverse()*y_grav;
+        float angle_error = acosf(grav_pred.normalized().dot(grav_meas.normalized()));
+        std::cout << " M.Dist.: " << d2 << "\n";
+        if(d2 < 9.0f) {
+            pr_used = true;
+            Eigen::Matrix<float, 15, 3> K = P * H_grav.transpose() * S.inverse();
+            K.block<3,1>(9,0).setZero();   // acc_b
+            error_pred = K * y_grav;
+            nom_state.p = nom_state.p + error_pred.segment<3>(0);
+            nom_state.vel = nom_state.vel + error_pred.segment<3>(3);
+            d_theta_grav = error_pred.segment<3>(6);
+            d_theta_grav(2) = 0.0f;  // remove yaw
+            if (d_theta_grav.norm() > 1.0f) {
+            d_theta_grav = d_theta_grav.normalized();
+            }
+            gyro_grav = error_pred.segment<3>(12);
+            gyro_grav(2) = 0.0f;
+            // std::cout << ", d Theta Pred: " << d_theta_grav.norm() << ", Covariance Matrix: " << P.norm() << ", Innovation: " << S.inverse().norm();
+        }
+        else {
+            pr_used = false;
+        }
+        
+        // std::cout << "\n";
+    }
+    else {
+        pr_used = false;
+    }
+
     if(new_mag) {
         Eigen::Matrix<float,1,15> H_mag;
         H_mag.setZero();
@@ -249,58 +221,6 @@ eskf::State eskf::fuse_sensors(bool new_mag, bool new_baro, bool new_gps) {
         mag_used = false;
     }
 
-    // Use the measured gravity to correct pitch and roll:
-    float acc_norm = (acc_meas - nom_state.acc_b).norm();
-    // std::cout << acc_norm << "\n";
-    float angle = acosf((acc_meas-nom_state.acc_b).normalized().dot(nom_state.q.toRotationMatrix().transpose()*g.normalized()));
-    std::cout << "Angle: " << angle << ", Acc Norm: " << acc_norm << "\n";
-    if (fabsf(angle) < .175 || (acc_norm >= 9.0f && acc_norm <= 10.5f) ) {
-        used_grav = true;
-        // std::cout << "Correcting Pitch Roll" << "\n";
-        nom_state.q.normalize();
-        Eigen::Matrix3f R = nom_state.q.toRotationMatrix();
-        Eigen::Vector3f grav_pred = R.transpose()*g;
-        // std::cout << grav_pred(2);
-        Eigen::Matrix<float,3,15> H_grav = Eigen::Matrix<float,3,15>::Zero();
-        H_grav.block<3,3>(0,6) = skewSymmetric(grav_pred);
-        Eigen::Vector3f grav_meas = (acc_meas - nom_state.acc_b).normalized() * 9.81f;
-        // std::cout << " " << grav_meas(2) << "\n";
-        Eigen::Matrix3f R_grav = predicted_grav_noise * Eigen::Matrix3f::Identity();
-
-        Eigen::Vector3f y_grav = grav_pred-grav_meas;
-        std::cout << "Grav correction Residual" << y_grav << "\n";
-        std::cout << "Grav residual " << y_grav.norm();
-        Eigen::Matrix3f S = H_grav * P * H_grav.transpose() + R_grav;
-        // Apply Mahalanobis Gating
-        float d2 = y_grav.transpose()*S.inverse()*y_grav;
-        float angle_error = acosf(grav_pred.normalized().dot(grav_meas.normalized()));
-        std::cout << " M.Dist.: " << d2 << "\n";
-        if(d2 < 9.0f) {
-            pr_used = true;
-            Eigen::Matrix<float, 15, 3> K = P * H_grav.transpose() * S.inverse();
-            K.block<3,1>(9,0).setZero();   // acc_b
-            error_pred = K * y_grav;
-            nom_state.p = nom_state.p + error_pred.segment<3>(0);
-            nom_state.vel = nom_state.vel + error_pred.segment<3>(3);
-            d_theta_grav = error_pred.segment<3>(6);
-            d_theta_grav(2) = 0.0f;  // remove yaw
-            if (d_theta_grav.norm() > 1.0f) {
-            d_theta_grav = d_theta_grav.normalized();
-            }
-            gyro_grav = error_pred.segment<3>(12);
-            gyro_grav(2) = 0.0f;
-            // std::cout << ", d Theta Pred: " << d_theta_grav.norm() << ", Covariance Matrix: " << P.norm() << ", Innovation: " << S.inverse().norm();
-        }
-        else {
-            pr_used = false;
-        }
-        
-        // std::cout << "\n";
-    }
-    else {
-        pr_used = false;
-    }
-
     // Since quaternion's aren't communitive, I've combined the grav vector error and the observed magnetometer error here and done one rotation
     if(d_theta_mag.norm() > 0 || d_theta_grav.norm() > 0) {
         Eigen::Quaternionf dq;
@@ -330,6 +250,86 @@ eskf::State eskf::fuse_sensors(bool new_mag, bool new_baro, bool new_gps) {
         // Inflate covariance matrix to reflect loss of confidence (we didn't obeserve anything this state)
         P(8,8) *= yaw_cov_infl;
     }
+
+
+    if(new_gps) {
+        Eigen::Matrix<float,3,15> H_gps;
+        H_gps.setZero();
+        H_gps.block<3,3>(0,0) = Eigen::Matrix3f::Identity();
+        Eigen::Matrix<float,3,3> V_gps = Eigen::Matrix<float,3,3>::Zero();
+        // TODO: Model the accuracies as an estimated 1-sigma standard dev, ensure unit is meters
+        V_gps(0,0) = gps_hAcc*gps_hAcc;  // at least 1 m²
+        V_gps(1,1) = gps_hAcc*gps_hAcc;
+        V_gps(2,2) = gps_vAcc*gps_vAcc;  // z often noisier
+        // Calculate GPS Kalman Gain
+        Eigen::Matrix<float,15,3> K_gps = P * H_gps.transpose() * (H_gps*P*H_gps.transpose()+V_gps).ldlt().solve(Eigen::Matrix<float,3,3>::Identity());
+        // K_gps.block<3,3>(9,0).setZero();   // acc_b
+        // K_gps.block<3,3>(12,0).setZero();  // gyro_b
+        // K_gps.block<3,3>(6,0).setZero();  // orientation
+        // std::cout << K_gps << "\n";
+        // std::cout << K_gps.norm() << "\n";
+        Eigen::Vector3f gps_vec(gps_x,gps_y,gps_z);
+        Eigen::Vector3f y_gps = gps_vec-nom_state.p;
+        // Calculate observed error
+        error_pred = K_gps*(y_gps);
+        // std::cout << "GPS residual: " << y_gps(0) << ", " << y_gps(1) << ", " << y_gps(2) << ", Gps error prediction: " << error_pred(0) << ", " << error_pred(1) << ", " << error_pred(2) << ", hAcc: "
+        // << gps_hAcc << ", vAcc" << gps_vAcc << ", K Gain Norm: " << K_gps.norm() << "\n";
+        // // Update Covariance matrix
+        Eigen::Matrix<float,15,15> old_p = P;
+        P = (Eigen::Matrix<float,15,15>::Identity()-K_gps*H_gps)*P*(Eigen::Matrix<float,15,15>::Identity()-K_gps*H_gps).transpose() + K_gps*V_gps*K_gps.transpose();
+        std::cout << (P-old_p) << "\n";
+        // Inject observed error into state
+        nom_state.p = nom_state.p + error_pred.segment<3>(0);
+        nom_state.vel = nom_state.vel + error_pred.segment<3>(3);
+        Eigen::Vector3f d_theta = error_pred.segment<3>(6);
+        Eigen::Quaternionf dq;
+        float theta = d_theta.norm();
+        if (theta > 1e-5f) {
+            dq = Eigen::AngleAxisf(theta, d_theta.normalized());
+        } else {
+            dq = Eigen::Quaternionf(1, d_theta(0)/2.0f, d_theta(1)/2.0f, d_theta(2)/2.0f);  // first-order
+        }
+        nom_state.q = (dq * nom_state.q).normalized();
+        nom_state.acc_b = nom_state.acc_b + error_pred.segment<3>(9);
+        nom_state.gyro_b = nom_state.gyro_b + error_pred.segment<3>(12);
+    }
+
+    // TODO: Implement something to not use barometer when it sucks (ie when GPS height is less than 1 don't use baro)
+    if(new_baro) {
+        Eigen::Matrix<float,1,15> H_baro = Eigen::Matrix<float,1,15>::Zero();
+        H_baro(0,2) = 1.0f;
+        Eigen::Matrix<float,1,1> V_baro =  Eigen::Matrix<float,1,1>::Constant(baro_noise);
+        // Calculate the Kalman gain of the barometer
+        float S = (H_baro * P * H_baro.transpose())(0,0) + V_baro(0,0);
+        Eigen::Matrix<float,15,1> K_baro = P * H_baro.transpose() / S;
+        // K_baro.segment<3>(12).setZero();
+        // K_baro.segment<3>(6).setZero();
+        // TODO: Figure out what Kalman gains to zero out from ekf2 (probably everything x,y related, q, gyro)
+        float y_baro = baro_meas-nom_state.p(2);
+        // Make sure that the barometer reading is in reasonable error range, if not don't use it (Disabled for now)
+        // if((S>V_baro(0,0))&& fabs(y_baro) < baro_dev_tol*sqrtf(S)) {
+            // Calculate our observed error of the barometer
+            Eigen::Matrix<float,15,1> error_pred = K_baro*(y_baro);
+            // Update Covariance matrix
+            P = (Eigen::Matrix<float,15,15>::Identity()-K_baro*H_baro)*P*(Eigen::Matrix<float,15,15>::Identity()-K_baro*H_baro).transpose() + K_baro*V_baro*K_baro.transpose();
+            // Inject observed error into the nominal state
+            nom_state.p = nom_state.p + error_pred.segment<3>(0);
+            nom_state.vel = nom_state.vel + error_pred.segment<3>(3);
+            Eigen::Vector3f d_theta = error_pred.segment<3>(6);
+            Eigen::Quaternionf dq;
+            float theta = d_theta.norm();
+            if (theta > 1e-5f) {
+                dq = Eigen::AngleAxisf(theta, d_theta.normalized());
+            } else {
+                dq = Eigen::Quaternionf(1, d_theta(0)/2.0f, d_theta(1)/2.0f, d_theta(2)/2.0f);  // first-order
+            }
+            nom_state.q = (dq * nom_state.q).normalized();
+            nom_state.acc_b = nom_state.acc_b + error_pred.segment<3>(9);
+            nom_state.gyro_b = nom_state.gyro_b + error_pred.segment<3>(12);
+        // }
+    }
+
+    
 
     if (!P.allFinite()) {
         P.setIdentity();

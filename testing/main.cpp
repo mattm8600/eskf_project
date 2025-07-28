@@ -63,7 +63,6 @@ int main() {
             use_baro = true;
         }
         // Try reading in GPS
-        // gps_x,gps_y,gps_z,gps_hAcc,gps_vAcc,gps_veln,gps_vele,gps_veld,gps_sAcc,gps_heading,gps_cAcc
         for(int i=0; i<11; i++) {
             std::getline(ss, value, ',');
             if(value != "-9999999.00") {
@@ -119,20 +118,14 @@ int main() {
             Eigen::Quaternionf q_init(1, 0, 0, 0);
             kf.nom_state.q = q_init;
             kf.nom_state.acc_b = Eigen::Vector3f(-0.047293f,-0.01987f,0.002095f);
-            // TODO: Calibrate gyro by taking data for a few seconds and averaging gyro
             kf.nom_state.gyro_b = Eigen::Vector3f(-0.000011f, 0.001656f, 0.000006f);
             first_run = false;
         }
         kf.deltaT = time - t_0;
-        // std::cout << kf.deltaT << "\n";
         if(gps_lock) {
             kf.update(use_baro,use_gps,use_mag);
-            // printEigen(kf.P.block<3,3>(6,6), "Attitude Covariance");
         }
         t_0 = time;
-        cout << "Time: " << time << "\n";
-        // cout << "Time: " << time << ", Norm of P theta " << kf.P(6,6) << ", " << kf.P(7,7) << ", " << kf.P(8,8) << "\n";
-        // printEigen(kf.P, "Covaraince Matrix");
         FileOut << time;
         for (size_t i = 0; i < 3; ++i) {
             FileOut << ",";

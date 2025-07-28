@@ -64,6 +64,8 @@ axes[0].legend(loc='upper left')
 axes[1].legend(loc='upper left')
 axes[2].legend(loc='upper left')
 plt.show(block=False)
+
+
 # Compare acceleration bias and acceleration:
 # fig, axes = plt.subplots(2, 1, figsize=(24, 20))
 # axes[0].plot(df["time"], df["ax_bias"], label="ax_bias")
@@ -98,16 +100,6 @@ plt.show(block=False)
 # axes[0].legend(fontsize=12)
 # axes[1].legend(fontsize=12)
 # plt.show(block=False)
-
-# Compare Yaw in vs Yaw out
-# fig, axes = plt.subplots(2, 1, figsize=(24, 20))
-# axes[0].plot(df["time"], df["yaw"], label="yaw_hat")
-# axes[1].plot(df["time"], df["yaw_residual"], label="yaw_residual")
-# axes[0].grid(True, which='both', linestyle='--', linewidth=0.5)
-# axes[1].grid(True, which='both', linestyle='--', linewidth=0.5)
-# axes[0].legend(fontsize=12)
-# axes[1].legend(fontsize=12)
-# plt.show()
 
 # Roll, Pitch, Yaw
 fig, axes = plt.subplots(3, 1, figsize=(24, 20), sharex=True, constrained_layout=True)
@@ -222,12 +214,6 @@ axes[1][2].plot(input_df["time"], input_df["heading"], '.', label="Mag heading")
 axes[1][2].plot(input_df["time"], input_df["gps_heading"], '.', label="Gps heading")
 
 
-
-
-
-
-
-
 axes[0][0].grid(True, which='both', linestyle='--', linewidth=0.5)
 axes[0][1].grid(True, which='both', linestyle='--', linewidth=0.5)
 axes[0][2].grid(True, which='both', linestyle='--', linewidth=0.5)
@@ -250,51 +236,5 @@ axes[1][1].legend(loc='lower left')
 axes[1][2].legend(loc='lower left')
 plt.show()
 
-# Estimated Heading vs Model's Heading vs Mag Heading
-# fig, axes = plt.subplots(4, 1, figsize=(30, 20))
-# axes[0].plot(df["time"], df["yaw"], '.', label="Model Heading")
-# axes[1].plot(df["time"], df["est_heading"], label="Estimated Mag heading")
-# axes[2].plot(input_df["time"], input_df["heading"], label="mag heading")
-# axes[3].plot(input_df["time"], input_df["mag_x"], label="Mag x")
-# axes[3].plot(input_df["time"], input_df["mag_y"], label="Mag y")
-# axes[3].plot(input_df["time"], input_df["mag_z"], label="Mag z")
-# axes[3].plot(input_df["time"], input_df["mag_norm"], label="Mag Norm")
-# axes[0].grid(True, which='both', linestyle='--', linewidth=0.5)
-# axes[1].grid(True, which='both', linestyle='--', linewidth=0.5)
-# axes[2].grid(True, which='both', linestyle='--', linewidth=0.5)
-# axes[3].grid(True, which='both', linestyle='--', linewidth=0.5)
-# axes[1].set_title("Estimated Heading vs Time (s)")
-# axes[0].set_title("Model Heading vs Time (s)")
-# axes[2].set_title("Mag Heading vs Time (s)")
-# axes[3].set_title("Mag vector vs Time (s)")
-# axes[0].legend(fontsize=12)
-# axes[1].legend(fontsize=12)
-# axes[2].legend(fontsize=12)
-# axes[3].legend(fontsize=12)
 
-# in_region = False
-# start_time = None
-# time = df["time"]
-# mag_used = df["mag_correction"]
-
-# for i in range(1, len(time)):
-#     if mag_used.iloc[i] == 1 and not in_region:
-#         in_region = True
-#         start_time = time.iloc[i]
-#     elif mag_used.iloc[i] == 0 and in_region:
-#         in_region = False
-#         end_time = time.iloc[i]
-#         axes[0].axvspan(start_time, end_time, color='lightgreen', alpha=0.3)
-
-# # If still in a region at the end of the data
-# if in_region:
-#     axes[0].axvspan(start_time, time.iloc[-1], color='lightgreen', alpha=0.3)
-
-# plt.show()
-
-# # Mag x,y,z and heading:
-# plt.plot(input_df['time'], input_df[['mag_x','mag_y','mag_z']])
-# plt.legend()
-# plt.grid(True)
-# plt.show(block=False)
 plt.pause(999999)

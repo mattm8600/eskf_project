@@ -94,9 +94,6 @@ void eskf::predict_covariance(Eigen::Matrix3f R, Eigen::Matrix3f acc_skew) {
     
 }
 
-// TODO: Setup system where barometer and GPS measurements are updated continuously, once gotten call this fn
-// TODO: Continuously update the GPS accuracy with the signal
-// Note: Both the GPS and Barometer have linear sensor models. Therefore we don't need to get super fancy with the jacobian math here
 eskf::State eskf::fuse_sensors(bool new_mag, bool new_baro, bool new_gps) {
 
     bool used_grav = false;
@@ -110,25 +107,18 @@ eskf::State eskf::fuse_sensors(bool new_mag, bool new_baro, bool new_gps) {
     // Use the measured gravity to correct pitch and roll:
     float acc_norm = (acc_meas - nom_state.acc_b).norm();
     float speed_norm = nom_state.vel.norm();
-    // std::cout << acc_norm << "\n";
     float angle = acosf((acc_meas-nom_state.acc_b).normalized().dot(nom_state.q.toRotationMatrix().transpose()*g.normalized()));
-    // std::cout << "Angle: " << angle << ", Acc Norm: " << acc_norm << "\n";
     if (fabsf(angle) < .175 || (acc_norm >= 9.0f && acc_norm <= 10.5f) ) {
         pr_used = true;
-        // std::cout << "Correcting Pitch Roll" << "\n";
         nom_state.q.normalize();
         Eigen::Matrix3f R = nom_state.q.toRotationMatrix();
         Eigen::Vector3f grav_pred = R.transpose()*g;
-        // std::cout << grav_pred(2);
         Eigen::Matrix<float,3,15> H_grav = Eigen::Matrix<float,3,15>::Zero();
         H_grav.block<3,3>(0,6) = -1*skewSymmetric(grav_pred);
         Eigen::Vector3f grav_meas = (acc_meas - nom_state.acc_b).normalized() * 9.81f;
-        // std::cout << " " << grav_meas(2) << "\n";
         Eigen::Matrix3f R_grav = predicted_grav_noise * Eigen::Matrix3f::Identity();
 
         Eigen::Vector3f y_grav = grav_pred-grav_meas;
-        // std::cout << "Grav correction Residual" << y_grav << "\n";
-        // std::cout << "Grav residual " << y_grav.norm();
         Eigen::Matrix3f S = H_grav * P * H_grav.transpose() + R_grav;
         // Apply Mahalanobis Gating
         float d2 = y_grav.transpose()*S.inverse()*y_grav;
@@ -293,10 +283,9 @@ eskf::State eskf::fuse_sensors(bool new_mag, bool new_baro, bool new_gps) {
         H_gps.block<3,3>(0,0) = Eigen::Matrix3f::Identity();
         H_gps.block<3,3>(3,3) = Eigen::Matrix3f::Identity();
         Eigen::Matrix<float,6,6> V_gps = Eigen::Matrix<float,6,6>::Zero();
-        // TODO: Model the accuracies as an estimated 1-sigma standard dev, ensure unit is meters
-        V_gps(0,0) = fmax(1.0f,gps_hAcc*gps_hAcc);  // at least 1 m²
+        V_gps(0,0) = fmax(1.0f,gps_hAcc*gps_hAcc);
         V_gps(1,1) = fmax(1.0f,gps_hAcc*gps_hAcc);
-        V_gps(2,2) = fmax(2.0f,gps_vAcc*gps_vAcc);  // z often noisier
+        V_gps(2,2) = fmax(2.0f,gps_vAcc*gps_vAcc);
         V_gps(3,3) = gps_sAcc*gps_sAcc;
         V_gps(4,4) = gps_sAcc*gps_sAcc;
         V_gps(5,5) = gps_sAcc*gps_sAcc;

@@ -13,8 +13,8 @@ void printEigen(const Eigen::MatrixBase<Derived>& mat, const std::string& name =
 
 int main() {
     bool first_run = true;
-    fstream FileIn("squareflightdataset.csv");
-    fstream FileOut("square_flight_results.csv");
+    fstream FileIn("tri_flight_2.csv");
+    fstream FileOut("tri_flight_2_results.csv");
     FileOut << "time,x_hat,y_hat,z_hat,Vx_hat,Vy_hat,Vz_hat,ax_hat,ay_hat,az_hat,ax_bias,ay_bias,az_bias,gx_bias,gy_bias,gz_bias,roll,pitch,yaw,est_heading,mag_correction,pr_correction,P_trace" << std::endl;
     std::string line;
     getline(FileIn, line);
@@ -24,13 +24,14 @@ int main() {
     bool use_baro = false;
     bool use_mag = false;
     bool use_gps = false;
-    for(int i=0; i<2313;i++) {
+    bool gps_lock = false;
+    for(int i=0; i<4565;i++) {
         getline(FileIn, line);
         std::stringstream ss(line);  // Use stringstream to extract tokens
         std::string value;
         Eigen::Vector3f acc;
         Eigen::Vector3f gyr;
-        Eigen::Vector<float,5> gps;
+        Eigen::Vector<float,11> gps;
         Eigen::Vector<float,4> mag;
 
         // Read in accelerometer
@@ -58,11 +59,12 @@ int main() {
         // Try reading in baro
         std::getline(ss,value,',');
         if(value != "-9999999.00") {
-            kf.baro_meas = -1*stof(value);
+            kf.baro_meas = stof(value);
             use_baro = true;
         }
         // Try reading in GPS
-        for(int i=0; i< 5; i++) {
+        // gps_x,gps_y,gps_z,gps_hAcc,gps_vAcc,gps_veln,gps_vele,gps_veld,gps_sAcc,gps_heading,gps_cAcc
+        for(int i=0; i<11; i++) {
             std::getline(ss, value, ',');
             if(value != "-9999999.00") {
             gps[i] = stof(value);
@@ -80,16 +82,31 @@ int main() {
         std::getline(ss, value, ',');
         time = stof(value) / (powf(10,6));
         kf.acc_meas = acc;
-        kf.gyro_meas = gyr*(1/16.4);
+        kf.gyro_meas = gyr;
         if(use_gps) {
-            kf.gps_x = gps(0);
-            kf.gps_y = gps(1);
-            kf.gps_z = gps(2);
+            kf.gps_meas = Eigen::Vector<float,7>(gps(0),gps(1),gps(2)-0.75f,gps(5),gps(6),gps(7),gps(9));
             kf.gps_hAcc = gps(3);
             kf.gps_vAcc = gps(4);
+            kf.gps_sAcc = gps(8);
+            kf.gps_cAcc = gps(10);
+
+
+            if(!gps_lock && gps(3) > 0 && gps(4) > 0 && gps(3) < 5 && gps(4) < 6) {
+                gps_lock = true;
+                Eigen::Vector3f acc = (kf.acc_meas - kf.nom_state.acc_b).normalized();
+                float pitch = atan2(-acc.x(), std::sqrt(acc.y() * acc.y() + acc.z() * acc.z()));
+                float roll  = atan2(acc.y(), acc.z());
+                Eigen::Quaternionf q_yaw(Eigen::AngleAxis(kf.mag_heading, Eigen::Vector3f::UnitZ()));
+                Eigen::Quaternionf q_roll(Eigen::AngleAxis(roll,  Eigen::Vector3f::UnitX()));
+                Eigen::Quaternionf q_pitch(Eigen::AngleAxis(pitch, Eigen::Vector3f::UnitY()));
+                Eigen::Quaternionf q_init = q_yaw * q_pitch * q_roll;
+                kf.nom_state.q = q_init.normalized();
+                printEigen(q_init.toRotationMatrix(), "Initial Rotation");
+                cout << "Got GPS Lock!" << gps(3) << ", " << gps(4) << "\n";
+            }
         }
         if(use_mag) {
-            kf.mag_heading = mag(0)*(M_PI/180); // Assumes heading given in degrees, must wrap to +- pi
+            kf.mag_heading = mag(0);
             kf.mag_heading = kf.wrapToPi(kf.mag_heading);
             kf.mag_vec = Eigen::Vector3f(mag(1),mag(2),mag(3));
         }
@@ -97,29 +114,22 @@ int main() {
             t_0 = time;
             kf.nom_state.p = Eigen::Vector3f(0,0,0.05);
             kf.nom_state.vel = Eigen::Vector3f(0,0,0);
-            // Eigen::Quaternionf q_init(1, 0, 0, 0);
-            // kf.nom_state.q = q_init;
+            kf.acc_ned = Eigen::Vector3f::Zero();
+            Eigen::Quaternionf q_init(1, 0, 0, 0);
+            kf.nom_state.q = q_init;
             kf.nom_state.acc_b = Eigen::Vector3f(-0.047293f,-0.01987f,0.002095f);
-            kf.nom_state.gyro_b = Eigen::Vector3f(0.006321f,-0.0443f,0.003061f);
-            
-            // Accelerometer is already in NED
-            Eigen::Vector3f acc = (kf.acc_meas - kf.nom_state.acc_b).normalized();
-            float pitch = atan2(-acc.x(), std::sqrt(acc.y() * acc.y() + acc.z() * acc.z()));
-            float roll  = atan2(acc.y(), acc.z());
-            Eigen::Quaternionf q_yaw(Eigen::AngleAxis(kf.mag_heading, Eigen::Vector3f::UnitZ()));
-            Eigen::Quaternionf q_roll(Eigen::AngleAxis(roll,  Eigen::Vector3f::UnitX()));
-            Eigen::Quaternionf q_pitch(Eigen::AngleAxis(pitch, Eigen::Vector3f::UnitY()));
-            Eigen::Quaternionf q_init = q_yaw * q_pitch * q_roll;
-            kf.nom_state.q = q_init.normalized();
-            printEigen(q_init.toRotationMatrix(), "Initial Rotation");
+            // TODO: Calibrate gyro by taking data for a few seconds and averaging gyro
+            kf.nom_state.gyro_b = Eigen::Vector3f(-0.000011f, 0.001656f, 0.000006f);
             first_run = false;
         }
         kf.deltaT = time - t_0;
-        cout << "Time Delta: " << kf.deltaT << "\n";
         // std::cout << kf.deltaT << "\n";
-        kf.update(use_baro,use_gps,use_mag);
+        if(gps_lock) {
+            kf.update(use_baro,use_gps,use_mag);
+            // printEigen(kf.P.block<3,3>(6,6), "Attitude Covariance");
+        }
         t_0 = time;
-        cout << "Time: " << time << " ";
+        cout << "Time: " << time << "\n";
         // cout << "Time: " << time << ", Norm of P theta " << kf.P(6,6) << ", " << kf.P(7,7) << ", " << kf.P(8,8) << "\n";
         // printEigen(kf.P, "Covaraince Matrix");
         FileOut << time;

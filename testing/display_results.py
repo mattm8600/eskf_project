@@ -3,25 +3,41 @@ import pandas as pd
 from IPython.display import display
 import matplotlib.pyplot as plt
 
-csv_file_path = "square_flight_results.csv"
+csv_file_path = "tri_flight_2_results.csv"
 df = pd.read_csv(csv_file_path)
-input_df = pd.read_csv("squareflightdataset.csv")
+input_df = pd.read_csv("tri_flight_2.csv")
 input_df = input_df.replace(-9999999.00, np.nan)
 input_df['time'] = input_df['time']/(1e6)
-input_df[["gyrx","gyry","gyrz"]] = input_df[["gyrx","gyry","gyrz"]]*(1/16.4)
 mean_input_acc = input_df[["ax","ay","az"]].mean()
 display(mean_input_acc)
 mean_acceleration = df[["ax_hat", "ay_hat", "az_hat"]].mean()
-df['est_heading'] = df['est_heading'] * (180/np.pi)
-df['yaw'] = df['yaw'] * (180/np.pi)
+mask = input_df['time'] < 90.0
+accuracyS_mask = input_df[['gps_hAcc','gps_vAcc','gps_sAcc','gps_cAcc']] > 100
+input_df.loc[:, ['gps_hAcc','gps_vAcc','gps_sAcc','gps_cAcc']] = input_df.loc[:, ['gps_hAcc','gps_vAcc','gps_sAcc','gps_cAcc']].mask(accuracyS_mask, np.nan)
+
+avg_bias = input_df.loc[mask, ["gyrx", "gyry", "gyrz"]].mean()
+display(avg_bias)
 input_df['mag_norm'] = np.sqrt(input_df['mag_x']*input_df['mag_x'] + input_df['mag_y']*input_df['mag_y'] + input_df['mag_z']*input_df['mag_z'])
 # pd.set_option('display.max_columns', None)
 # row = df[df["time"] == 186686]
 
-# print(row)
+
+plt.rcParams.update({
+    "axes.titlesize": 22,
+    "axes.labelsize": 14,
+    "xtick.labelsize": 14,
+    "ytick.labelsize": 14,
+    "legend.fontsize": 18,
+    "lines.linewidth": 2,
+    "lines.markersize": 5
+})
+
+
+
+display(input_df["gps_heading"])
 
 # time,x_hat,y_hat,z_hat,Vx_hat,Vy_hat,Vz_hat,ax_hat,ay_hat,az_hat
-fig, axes = plt.subplots(4, 1, figsize=(30, 20))
+fig, axes = plt.subplots(3, 1, figsize=(24, 20), sharex=True, constrained_layout=True)
 axes[0].plot(df["time"], df["x_hat"], label="x_hat")
 axes[0].plot(df["time"], df["y_hat"], label="y_hat")
 axes[0].plot(df["time"], df["z_hat"], label="z_hat")
@@ -34,7 +50,6 @@ axes[2].plot(df["time"], df["ax_hat"], label="ax_hat")
 axes[2].plot(df["time"], df["ay_hat"], label="ay_hat")
 axes[2].plot(df["time"], df["az_hat"], label="az_hat")
 
-axes[3].plot(df['time'], df['P_trace'], label="Cov. Trace")
 
 axes[0].grid(True, which='both', linestyle='--', linewidth=0.5)
 axes[1].grid(True, which='both', linestyle='--', linewidth=0.5)
@@ -45,44 +60,44 @@ axes[1].set_title("Velocity vs Time (s)")
 axes[2].set_title("Acceleration vs Time (s)")
 
 
-axes[0].legend(fontsize=12)
-axes[1].legend(fontsize=12)
-axes[2].legend(fontsize=12)
+axes[0].legend(loc='upper left')
+axes[1].legend(loc='upper left')
+axes[2].legend(loc='upper left')
 plt.show(block=False)
 # Compare acceleration bias and acceleration:
-fig, axes = plt.subplots(2, 1, figsize=(24, 20))
-axes[0].plot(df["time"], df["ax_bias"], label="ax_bias")
-axes[0].plot(df["time"], df["ay_bias"], label="ay_bias")
-axes[0].plot(df["time"], df["az_bias"], label="az_bias")
-axes[1].plot(input_df["time"], input_df["ax"], label="ax", marker='o',markersize=2,linestyle='None')
-axes[1].plot(input_df["time"], input_df["ay"], label="ay", marker='o',markersize=2,linestyle='None')
-axes[1].plot(input_df["time"], input_df["az"], label="az", marker='o',markersize=2,linestyle='None')
-axes[0].grid(True, which='both', linestyle='--', linewidth=0.5)
-axes[1].grid(True, which='both', linestyle='--', linewidth=0.5)
-axes[0].set_title("Acceleration Bias vs Time (s)")
-axes[1].set_title("Predicted Acceleration vs Time (s)")
-axes[0].legend(fontsize=12)
-axes[1].legend(fontsize=12)
-plt.show(block=False)
+# fig, axes = plt.subplots(2, 1, figsize=(24, 20))
+# axes[0].plot(df["time"], df["ax_bias"], label="ax_bias")
+# axes[0].plot(df["time"], df["ay_bias"], label="ay_bias")
+# axes[0].plot(df["time"], df["az_bias"], label="az_bias")
+# axes[1].plot(input_df["time"], input_df["ax"], label="ax", marker='o',markersize=2,linestyle='None')
+# axes[1].plot(input_df["time"], input_df["ay"], label="ay", marker='o',markersize=2,linestyle='None')
+# axes[1].plot(input_df["time"], input_df["az"], label="az", marker='o',markersize=2,linestyle='None')
+# axes[0].grid(True, which='both', linestyle='--', linewidth=0.5)
+# axes[1].grid(True, which='both', linestyle='--', linewidth=0.5)
+# axes[0].set_title("Acceleration Bias vs Time (s)")
+# axes[1].set_title("Predicted Acceleration vs Time (s)")
+# axes[0].legend(fontsize=12)
+# axes[1].legend(fontsize=12)
+# plt.show(block=False)
 
 # Compare gyro bias and gyro:
-fig, axes = plt.subplots(3, 1, figsize=(24, 20))
-axes[0].plot(df["time"], df["gx_bias"], label="gx_bias")
-axes[0].plot(df["time"], df["gy_bias"], label="gy_bias")
-axes[0].plot(df["time"], df["gz_bias"], label="gz_bias")
-axes[1].plot(input_df["time"], input_df["gyrx"], label="gyr_x", marker='o',markersize=2,linestyle='None')
-axes[1].plot(input_df["time"], input_df["gyry"], label="gyr_y", marker='o',markersize=2,linestyle='None')
-axes[1].plot(input_df["time"], input_df["gyrz"], label="gyr_z", marker='o',markersize=2,linestyle='None')
-# axes[1].plot(input_df["time"], df["filt_w_x"], label="filtered w_x")
-# axes[1].plot(input_df["time"], df["filt_w_y"], label="filtered w_y")
-# axes[1].plot(input_df["time"], df["filt_w_z"], label="filtered w_z")
-axes[0].grid(True, which='both', linestyle='--', linewidth=0.5)
-axes[1].grid(True, which='both', linestyle='--', linewidth=0.5)
-axes[0].set_title("Gyro Bias vs Time (s)")
-axes[1].set_title("Input gyro vs Time (s)")
-axes[0].legend(fontsize=12)
-axes[1].legend(fontsize=12)
-plt.show(block=False)
+# fig, axes = plt.subplots(3, 1, figsize=(24, 20))
+# axes[0].plot(df["time"], df["gx_bias"], label="gx_bias")
+# axes[0].plot(df["time"], df["gy_bias"], label="gy_bias")
+# axes[0].plot(df["time"], df["gz_bias"], label="gz_bias")
+# axes[1].plot(input_df["time"], input_df["gyrx"], label="gyr_x", marker='o',markersize=2,linestyle='None')
+# axes[1].plot(input_df["time"], input_df["gyry"], label="gyr_y", marker='o',markersize=2,linestyle='None')
+# axes[1].plot(input_df["time"], input_df["gyrz"], label="gyr_z", marker='o',markersize=2,linestyle='None')
+# # axes[1].plot(input_df["time"], df["filt_w_x"], label="filtered w_x")
+# # axes[1].plot(input_df["time"], df["filt_w_y"], label="filtered w_y")
+# # axes[1].plot(input_df["time"], df["filt_w_z"], label="filtered w_z")
+# axes[0].grid(True, which='both', linestyle='--', linewidth=0.5)
+# axes[1].grid(True, which='both', linestyle='--', linewidth=0.5)
+# axes[0].set_title("Gyro Bias vs Time (s)")
+# axes[1].set_title("Input gyro vs Time (s)")
+# axes[0].legend(fontsize=12)
+# axes[1].legend(fontsize=12)
+# plt.show(block=False)
 
 # Compare Yaw in vs Yaw out
 # fig, axes = plt.subplots(2, 1, figsize=(24, 20))
@@ -95,7 +110,7 @@ plt.show(block=False)
 # plt.show()
 
 # Roll, Pitch, Yaw
-fig, axes = plt.subplots(3, 1, figsize=(24, 20))
+fig, axes = plt.subplots(3, 1, figsize=(24, 20), sharex=True, constrained_layout=True)
 axes[0].plot(df["time"], df["roll"], label="roll", marker='o',markersize=3)
 axes[1].plot(df["time"], df["pitch"], label="pitch", marker='o',markersize=3)
 axes[2].plot(df["time"], df["yaw"], label="yaw", marker='o',markersize=3)
@@ -108,9 +123,9 @@ axes[1].set_title("Pitch")
 axes[2].set_title("Yaw")
 
 
-axes[0].legend(fontsize=12)
-axes[1].legend(fontsize=12)
-axes[2].legend(fontsize=12)
+axes[0].legend(loc='upper right')
+axes[1].legend(loc='upper right')
+axes[2].legend(loc='upper right')
 
 in_region = False
 start_time = None
@@ -155,36 +170,66 @@ plt.show(block=False)
 
 
 # INPUT:
-fig, axes = plt.subplots(4, 1, figsize=(30, 20))
-axes[0].plot(input_df["time"], input_df["gps_x"], '.', label="GPS x")
-axes[0].plot(input_df["time"], input_df["gps_y"], '.', label="GPS y")
-axes[0].plot(input_df["time"], input_df["gps_z"], '.', label="GPS z")
-axes[0].plot(input_df["time"], input_df["baro"], label="Baro z")
+fig, axes = plt.subplots(2, 3, figsize=(24, 40), sharex=True, constrained_layout=True)
 
-axes[1].plot(input_df["time"], input_df["gyrx"], label="gyr_x")
-axes[1].plot(input_df["time"], input_df["gyry"], label="gyr_y")
-axes[1].plot(input_df["time"], input_df["gyrz"], label="gyr_z")
+# Plot 1: GPS Position
+axes[0][0].plot(input_df["time"], input_df["gps_x"], '.', label="GPS x")
+axes[0][0].plot(input_df["time"], input_df["gps_y"], '.', label="GPS y")
+axes[0][0].plot(input_df["time"], input_df["gps_z"], '.', label="GPS z")
+axes[0][0].plot(input_df["time"], input_df["baro"], '.', label="Baro z")
 
-axes[2].plot(input_df["time"], input_df["ax"], label="ax")
-axes[2].plot(input_df["time"], input_df["ay"], label="ay")
-axes[2].plot(input_df["time"], input_df["az"], label="az")
+# Plot 2: GPS Velocity
+axes[0][1].plot(input_df["time"], input_df["gps_veln"], '.', label="GPS Vel N")
+axes[0][1].plot(input_df["time"], input_df["gps_vele"], '.', label="GPS Vel E")
+axes[0][1].plot(input_df["time"], input_df["gps_veld"], '.', label="GPS Vel D")
 
-axes[3].plot(input_df["time"], input_df["heading"], label="Mag heading")
+# Plot 3: GPS Accuracy
+axes[0][2].plot(input_df["time"], input_df["gps_hAcc"], '.', label="Gps Horiz. Acc.")
+axes[0][2].plot(input_df["time"], input_df["gps_vAcc"], '.', label="Gps Vert. Acc.")
+axes[0][2].plot(input_df["time"], input_df["gps_sAcc"], '.', label="Gps Speed Acc.")
+axes[0][2].plot(input_df["time"], input_df["gps_cAcc"], '.', label="Gps Heading Acc.")
 
-axes[0].grid(True, which='both', linestyle='--', linewidth=0.5)
-axes[1].grid(True, which='both', linestyle='--', linewidth=0.5)
-axes[2].grid(True, which='both', linestyle='--', linewidth=0.5)
-axes[3].grid(True, which='both', linestyle='--', linewidth=0.5)
-axes[0].set_title("Position vs Time (s)")
-axes[1].set_title("Angular Velocity vs Time (s)")
-axes[2].set_title("Acceleration vs Time (s)")
-axes[3].set_title("Heading vs Time (s)")
+# Plot 4: Accelerometer
+axes[1][0].plot(input_df["time"], input_df["ax"], '.', label="Ax")
+axes[1][0].plot(input_df["time"], input_df["ay"], '.', label="Ay")
+axes[1][0].plot(input_df["time"], input_df["az"], '.', label="Az")
+
+# Plot 5: Gyro
+axes[1][1].plot(input_df["time"], input_df["gyrx"], '.', label="Gyr x")
+axes[1][1].plot(input_df["time"], input_df["gyry"], '.', label="Gyr y")
+axes[1][1].plot(input_df["time"], input_df["gyrz"], '.', label="Gyr z")
+
+# Plot 6: Heading
+axes[1][2].plot(input_df["time"], input_df["heading"], '.', label="Mag heading")
+axes[1][2].plot(input_df["time"], input_df["gps_heading"], '.', label="Gps heading")
 
 
-axes[0].legend(fontsize=12)
-axes[1].legend(fontsize=12)
-axes[2].legend(fontsize=12)
-axes[3].legend(fontsize=12)
+
+
+
+
+
+
+axes[0][0].grid(True, which='both', linestyle='--', linewidth=0.5)
+axes[0][1].grid(True, which='both', linestyle='--', linewidth=0.5)
+axes[0][2].grid(True, which='both', linestyle='--', linewidth=0.5)
+axes[1][0].grid(True, which='both', linestyle='--', linewidth=0.5)
+axes[1][1].grid(True, which='both', linestyle='--', linewidth=0.5)
+axes[1][2].grid(True, which='both', linestyle='--', linewidth=0.5)
+axes[0][0].set_title("Position vs Time (s)")
+axes[0][1].set_title("GPS Velocity vs Time (s)")
+axes[0][2].set_title("GPS Accuracy vs Time (s)")
+axes[1][0].set_title("Body acceleration vs Time (s)")
+axes[1][1].set_title("Angular Velocity vs Time (s)")
+axes[1][2].set_title("Heading vs Time (s)")
+
+
+axes[0][0].legend(loc='lower left')
+axes[0][1].legend(loc='lower left')
+axes[0][2].legend(loc='lower left')
+axes[1][0].legend(loc='lower left')
+axes[1][1].legend(loc='lower left')
+axes[1][2].legend(loc='lower left')
 plt.show()
 
 # Estimated Heading vs Model's Heading vs Mag Heading

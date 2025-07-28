@@ -38,6 +38,7 @@ class eskf{
 
 
         // IMU Measurements
+        bool gps_lock_acquired = false;
         Eigen::Vector3f acc_meas;
         Eigen::Vector3f gyro_meas;
         Eigen::Vector3f omega_filtered = Eigen::Vector3f::Zero();
@@ -46,10 +47,7 @@ class eskf{
         float yaw_cov_infl = 1.1f;
         
         // GPS, Baro, magnetometer Measurements
-        float gps_x;
-        float gps_y;
-        float gps_z;
-
+        Eigen::Vector<float,7> gps_meas;
 
         // DEBUG
         Eigen::Matrix<float,15,1> error_pred;
@@ -69,25 +67,27 @@ class eskf{
 
         // BEFORE TAKEOFF NOISE
         // // White noise densities (from BMI270 datasheet)
-        // float sigma_a_n = 0.0018; // m/s^2 / sqrt(Hz)
-        // // float sigma_w_n = 0.0001222; // rad/s / sqrt(Hz)
-        // float sigma_w_n = 0.001f;
-        // // Random walk (Estimated from ChatGPT)
-        // float sigma_a_w = 1e-5f; // m/s^2 / sqrt(s)
-        // float sigma_w_w = 5e-4f;
+        float sigma_a_n = 0.0018; // m/s^2 / sqrt(Hz)
+        // float sigma_w_n = 0.0001222; // rad/s / sqrt(Hz)
+        float sigma_w_n = 0.01f;
+        // Random walk (Estimated from ChatGPT)
+        float sigma_a_w = 1e-5f; // m/s^2 / sqrt(s)
+        float sigma_w_w = 1e-3f;
 
         // AFTER TAKEOFF NOISE
-        // White noise densities (from BMI270 datasheet)
-        float sigma_a_n = 0.05f; // m/s^2 / sqrt(Hz)
-        // float sigma_w_n = 0.0001222; // rad/s / sqrt(Hz)
-        float sigma_w_n = 0.04f;
-        // Random walk (Estimated from ChatGPT)
-        float sigma_a_w = 5e-3f; // m/s^2 / sqrt(s)
-        float sigma_w_w = 1e-3f;
+        // // White noise densities (from BMI270 datasheet)
+        // float sigma_a_n = 0.05f; // m/s^2 / sqrt(Hz)
+        // // float sigma_w_n = 0.0001222; // rad/s / sqrt(Hz)
+        // float sigma_w_n = 0.04f;
+        // // Random walk (Estimated from ChatGPT)
+        // float sigma_a_w = 5e-3f; // m/s^2 / sqrt(s)
+        // float sigma_w_w = 1e-3f;
 
 
 
         // GPS Noise is already in one std dev units, taken directly from the GPS
+        float gps_sAcc;
+        float gps_cAcc;
         float gps_hAcc;
         float gps_vAcc;
         // From baro datasheet

@@ -47,8 +47,8 @@ class eskf{
         float yaw_cov_infl = 1.1f;
         
         // GPS, Baro, magnetometer Measurements
-        Eigen::Vector<float,7> gps_meas;
-
+        Eigen::Vector<float,6> gps_meas;
+        float gps_heading;
         // DEBUG
         Eigen::Matrix<float,15,1> error_pred;
         Eigen::Vector3f acc_ned;
@@ -101,6 +101,7 @@ class eskf{
         float yaw_pred = 0.0;
         bool mag_used = false;
         bool pr_used = false;
+        bool gps_yaw_used = false;
 
         eskf();
         bool update(bool new_baro, bool new_gps, bool new_mag);

@@ -15,7 +15,7 @@ int main() {
     bool first_run = true;
     fstream FileIn("tri_flight_2.csv");
     fstream FileOut("tri_flight_2_results.csv");
-    FileOut << "time,x_hat,y_hat,z_hat,Vx_hat,Vy_hat,Vz_hat,ax_hat,ay_hat,az_hat,ax_bias,ay_bias,az_bias,gx_bias,gy_bias,gz_bias,roll,pitch,yaw,est_heading,mag_correction,pr_correction,P_trace" << std::endl;
+    FileOut << "time,x_hat,y_hat,z_hat,Vx_hat,Vy_hat,Vz_hat,ax_hat,ay_hat,az_hat,ax_bias,ay_bias,az_bias,gx_bias,gy_bias,gz_bias,roll,pitch,yaw,est_heading,mag_correction,pr_correction,P_trace,gps_yaw_correction" << std::endl;
     std::string line;
     getline(FileIn, line);
     eskf kf = eskf();
@@ -84,7 +84,8 @@ int main() {
         kf.acc_meas = acc;
         kf.gyro_meas = gyr;
         if(use_gps) {
-            kf.gps_meas = Eigen::Vector<float,7>(gps(0),gps(1),gps(2)-0.75f,gps(5),gps(6),gps(7),gps(9));
+            kf.gps_meas = Eigen::Vector<float,6>(gps(0),gps(1),gps(2)-0.75f,gps(5),gps(6),gps(7));
+            kf.gps_heading = gps(9);
             kf.gps_hAcc = gps(3);
             kf.gps_vAcc = gps(4);
             kf.gps_sAcc = gps(8);
@@ -156,6 +157,7 @@ int main() {
         FileOut << "," << kf.mag_used;
         FileOut << "," << kf.pr_used;
         FileOut << "," << kf.P.trace();
+        FileOut << "," << kf.gps_yaw_used;
         FileOut << "\n";
         use_baro = false;
         use_gps = false;

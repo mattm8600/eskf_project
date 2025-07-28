@@ -34,21 +34,21 @@ plt.rcParams.update({
 
 
 
-display(input_df["gps_heading"])
+display(df["gps_yaw_correction"])
 
 # time,x_hat,y_hat,z_hat,Vx_hat,Vy_hat,Vz_hat,ax_hat,ay_hat,az_hat
 fig, axes = plt.subplots(3, 1, figsize=(24, 20), sharex=True, constrained_layout=True)
-axes[0].plot(df["time"], df["x_hat"], label="x_hat")
-axes[0].plot(df["time"], df["y_hat"], label="y_hat")
-axes[0].plot(df["time"], df["z_hat"], label="z_hat")
+axes[0].plot(df["time"], df["x_hat"], '.', label="x_hat")
+axes[0].plot(df["time"], df["y_hat"], '.', label="y_hat")
+axes[0].plot(df["time"], df["z_hat"], '.', label="z_hat")
 
-axes[1].plot(df["time"], df["Vx_hat"], label="Vx_hat")
-axes[1].plot(df["time"], df["Vy_hat"], label="Vy_hat")
-axes[1].plot(df["time"], df["Vz_hat"], label="Vz_hat")
+axes[1].plot(df["time"], df["Vx_hat"], '.', label="Vx_hat")
+axes[1].plot(df["time"], df["Vy_hat"], '.', label="Vy_hat")
+axes[1].plot(df["time"], df["Vz_hat"], '.', label="Vz_hat")
 
-axes[2].plot(df["time"], df["ax_hat"], label="ax_hat")
-axes[2].plot(df["time"], df["ay_hat"], label="ay_hat")
-axes[2].plot(df["time"], df["az_hat"], label="az_hat")
+axes[2].plot(df["time"], df["ax_hat"], '.', label="ax_hat")
+axes[2].plot(df["time"], df["ay_hat"], '.', label="ay_hat")
+axes[2].plot(df["time"], df["az_hat"], '.', label="az_hat")
 
 
 axes[0].grid(True, which='both', linestyle='--', linewidth=0.5)
@@ -165,6 +165,24 @@ for i in range(1, len(time)):
 if in_region:
     axes[0].axvspan(start_time, time.iloc[-1], color='lightgreen', alpha=0.3)
     axes[1].axvspan(start_time, time.iloc[-1], color='lightgreen', alpha=0.3)
+
+in_region = False
+start_time = None
+time = df["time"]
+gps = df["gps_yaw_correction"]
+
+for i in range(1, len(time)):
+    if gps.iloc[i] == 1 and not in_region:
+        in_region = True
+        start_time = time.iloc[i]
+    elif gps.iloc[i] == 0 and in_region:
+        in_region = False
+        end_time = time.iloc[i]
+        axes[2].axvspan(start_time, end_time, color='lightcoral', alpha=0.3)
+
+# If still in a region at the end of the data
+if in_region:
+    axes[2].axvspan(start_time, time.iloc[-1], color='lightcoral', alpha=0.3)
 
 plt.show(block=False)
 

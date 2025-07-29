@@ -27,7 +27,7 @@ int main() {
     bool gps_lock = false;
     for(int i=0; i<4565;i++) {
         getline(FileIn, line);
-        std::stringstream ss(line);  // Use stringstream to extract tokens
+        std::stringstream ss(line);
         std::string value;
         Eigen::Vector3f acc;
         Eigen::Vector3f gyr;
@@ -89,43 +89,17 @@ int main() {
             kf.gps_vAcc = gps(4);
             kf.gps_sAcc = gps(8);
             kf.gps_cAcc = gps(10);
-
-
-            if(!gps_lock && gps(3) > 0 && gps(4) > 0 && gps(3) < 5 && gps(4) < 6) {
-                gps_lock = true;
-                Eigen::Vector3f acc = (kf.acc_meas - kf.nom_state.acc_b).normalized();
-                float pitch = atan2(-acc.x(), std::sqrt(acc.y() * acc.y() + acc.z() * acc.z()));
-                float roll  = atan2(acc.y(), acc.z());
-                Eigen::Quaternionf q_yaw(Eigen::AngleAxis(kf.mag_heading, Eigen::Vector3f::UnitZ()));
-                Eigen::Quaternionf q_roll(Eigen::AngleAxis(roll,  Eigen::Vector3f::UnitX()));
-                Eigen::Quaternionf q_pitch(Eigen::AngleAxis(pitch, Eigen::Vector3f::UnitY()));
-                Eigen::Quaternionf q_init = q_yaw * q_pitch * q_roll;
-                kf.nom_state.q = q_init.normalized();
-                printEigen(q_init.toRotationMatrix(), "Initial Rotation");
-                cout << "Got GPS Lock!" << gps(3) << ", " << gps(4) << "\n";
-            }
         }
         if(use_mag) {
             kf.mag_heading = mag(0);
-            kf.mag_heading = kf.wrapToPi(kf.mag_heading);
+            kf.mag_heading = kf.wrap_to_pi(kf.mag_heading);
             kf.mag_vec = Eigen::Vector3f(mag(1),mag(2),mag(3));
         }
         if(first_run) { // ASSUMES LEAVING THE GROUND, For other start point reference GPS change
-            t_0 = time;
-            kf.nom_state.p = Eigen::Vector3f(0,0,0.05);
-            kf.nom_state.vel = Eigen::Vector3f(0,0,0);
-            kf.acc_ned = Eigen::Vector3f::Zero();
-            Eigen::Quaternionf q_init(1, 0, 0, 0);
-            kf.nom_state.q = q_init;
-            kf.nom_state.acc_b = Eigen::Vector3f(-0.047293f,-0.01987f,0.002095f);
-            kf.nom_state.gyro_b = Eigen::Vector3f(-0.000011f, 0.001656f, 0.000006f);
+            kf.set_initial_state();
             first_run = false;
         }
-        kf.deltaT = time - t_0;
-        if(gps_lock) {
-            kf.update(use_baro,use_gps,use_mag);
-        }
-        t_0 = time;
+        kf.update(use_baro,use_gps,use_mag,time);
         FileOut << time;
         for (size_t i = 0; i < 3; ++i) {
             FileOut << ",";
@@ -143,9 +117,9 @@ int main() {
         for (size_t i = 0; i < 3; ++i) {
             FileOut << "," << kf.nom_state.gyro_b[i];
         }
-        FileOut << "," << kf.getRoll();
-        FileOut << "," << kf.getPitch();
-        FileOut << "," << kf.getYaw();
+        FileOut << "," << kf.get_pitch();
+        FileOut << "," << kf.get_roll();
+        FileOut << "," << kf.get_yaw();
         FileOut << "," << kf.yaw_pred;
         FileOut << "," << kf.mag_used;
         FileOut << "," << kf.pr_used;

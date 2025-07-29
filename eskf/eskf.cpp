@@ -8,25 +8,60 @@
 // Perturbation impulses vector
 eskf::eskf() {
     // Set start state
-    deltaT = 0.050375;
     g = Eigen::Vector3f(0.0f,0.0f,9.81f);
-    B_ned = Eigen::Vector3f(0.4184f,-0.0791f,0.9048f);
-    // TODO: Allow setting the Noise vars via the constructor (currently done in class def)
-    // Initialize equal covariances to equal weighting
     P = Eigen::Matrix<float,15,15>::Identity();
     P.block<3,3>(6,6) = 0.01 * Eigen::Matrix3f::Identity(); // Attitude
     P.block<3,3>(9,9)   *= 1e-4;  // accel bias
     P.block<3,3>(12,12) *= 1e-4;  // gyro bias
 }
 
-bool eskf::update(bool new_baro, bool new_gps, bool new_mag) {
-    predict_state();
-    fuse_sensors(new_mag, new_baro, new_gps);
-    
+bool eskf::update(bool new_baro, bool new_gps, bool new_mag, uint32_t timestamp) {
+    bool success = false;
+    if(t_km1 == 0) {
+        t_km1 = timestamp;
+    }
+    deltaT = timestamp - t_km1;
+    t_km1 = timestamp;
 
-    return true;
+    if(gps_lock_acquired && gyr_bias_est) {
+        predict_state();
+        success = fuse_sensors(new_mag, new_baro, new_gps);
+    }
+    else if(!gyr_bias_est && gyro_meas.norm() < 0.02f) {
+        nom_state.gyro_b += gyro_meas;
+        gyr_sample_count ++;
+        if(gyr_sample_count > 200) {
+            nom_state.gyro_b = nom_state.gyro_b / gyr_sample_count;
+            gyr_bias_est = true;
+        }
+    }
+    else if(!gps_lock_acquired && new_gps && gps_hAcc > 0 && gps_vAcc > 0 && gps_hAcc < 5 && gps_vAcc < 6) {
+        Eigen::Vector3f acc = (acc_meas - nom_state.acc_b).normalized();
+        float pitch = atan2(-acc.x(), std::sqrt(acc.y() * acc.y() + acc.z() * acc.z()));
+        float roll  = atan2(acc.y(), acc.z());
+        Eigen::Quaternionf q_yaw(Eigen::AngleAxis(mag_heading, Eigen::Vector3f::UnitZ()));
+        Eigen::Quaternionf q_roll(Eigen::AngleAxis(roll,  Eigen::Vector3f::UnitX()));
+        Eigen::Quaternionf q_pitch(Eigen::AngleAxis(pitch, Eigen::Vector3f::UnitY()));
+        Eigen::Quaternionf q_init = q_yaw * q_pitch * q_roll;
+        nom_state.q = q_init.normalized();
+        gps_lock_acquired = true;
+    }
+    return success; 
 }
         
+bool eskf::set_initial_state(Eigen::Vector3f pos, Eigen::Vector3f vel, Eigen::Vector3f acc_b) {
+    nom_state.p = pos;
+    nom_state.vel = vel;
+    nom_state.acc_b = acc_b;
+    nom_state.gyro_b = Eigen::Vector3f::Zero();
+    return true;
+}
+
+
+
+
+
+
 void eskf::predict_state() {
 
     // Predict state x_k+1
@@ -36,16 +71,14 @@ void eskf::predict_state() {
     // Predict nominal State (x)
     // Nominal State Kinematics
     Eigen::Vector3f acc_bod = (acc_meas - nom_state.acc_b);
-    acc_ned = R *(acc_meas - nom_state.acc_b)-g;
-    // std::cout << "Acc bod: " << acc_bod << "\n";
-    // std::cout << "Acc ned: " << acc_ned << "\n";  
+    acc_ned = R *(acc_meas - nom_state.acc_b)-g; 
     nom_state.p = nom_state.p + nom_state.vel*deltaT + R*acc_ned*0.5f*deltaT*deltaT;
     nom_state.vel = nom_state.vel + acc_ned*deltaT;
     nom_state.acc_b = nom_state.acc_b;
     nom_state.gyro_b = nom_state.gyro_b;
 
     Eigen::Vector3f omega = gyro_meas - nom_state.gyro_b;
-    // Apply a first order low pass filter to smooth the omega
+    // Apply a first order low pass filter to smooth the angular velocity
     omega_filtered = gyr_alpha*omega + (1-gyr_alpha)*omega_filtered;
     float angle = omega_filtered.norm() * deltaT;
     Eigen::Vector3f axis = (angle < 1e-5f) ? omega_filtered : omega_filtered.normalized();
@@ -89,12 +122,11 @@ void eskf::predict_covariance(Eigen::Matrix3f R, Eigen::Matrix3f acc_skew) {
     Qi.block<3,3>(6, 6) = powf(sigma_a_w,2.0f)*deltaT*Eigen::Matrix3f::Identity(); 
     Qi.block<3,3>(9, 9) = powf(sigma_w_w,2.0f)*deltaT*Eigen::Matrix3f::Identity();  
     // Update Covariance matrix (P)
-    // std::cout << "Delta P: " << (Fx*P*Fx.transpose() + Fi*Qi*Fi.transpose() - P).block<3,3>(6,6).trace() << "\n";
     P = Fx*P*Fx.transpose() + Fi*Qi*Fi.transpose();
     
 }
 
-eskf::State eskf::fuse_sensors(bool new_mag, bool new_baro, bool new_gps) {
+bool eskf::fuse_sensors(bool new_mag, bool new_baro, bool new_gps) {
 
     bool used_grav = false;
     Eigen::Vector3f d_theta_mag = Eigen::Vector3f::Zero();
@@ -123,14 +155,12 @@ eskf::State eskf::fuse_sensors(bool new_mag, bool new_baro, bool new_gps) {
         // Apply Mahalanobis Gating
         float d2 = y_grav.transpose()*S.inverse()*y_grav;
         float angle_error = acosf(grav_pred.normalized().dot(grav_meas.normalized()));
-        // std::cout << "y_grav: " << y_grav.norm() << " Cov. Trace: " << P.block<3,3>(6,6).trace() << " M.Dist.: " << d2 << "\n";
         if(d2 < 16.0f) {
-        // if (true) {
             pr_used = true;
             Eigen::Matrix<float, 15, 3> K = P * H_grav.transpose() * S.inverse();
             K.block<3,1>(9,0).setZero();   // acc_b
             P = (Eigen::Matrix<float,15,15>::Identity()-K*H_grav)*P*(Eigen::Matrix<float,15,15>::Identity()-K*H_grav).transpose() + K*R_grav*K.transpose();
-            error_pred = K * y_grav;
+            Eigen::Matrix<float,15,1> error_pred = K * y_grav;
             nom_state.p = nom_state.p + error_pred.segment<3>(0);
             nom_state.vel = nom_state.vel + error_pred.segment<3>(3);
             d_theta_grav = error_pred.segment<3>(6);
@@ -138,13 +168,10 @@ eskf::State eskf::fuse_sensors(bool new_mag, bool new_baro, bool new_gps) {
             if (d_theta_grav.norm() > 1.0f) {
             d_theta_grav = d_theta_grav.normalized();
             }
-            // std::cout << "Applied correction! " << d_theta_grav.norm();
             gyro_grav = error_pred.segment<3>(12);
             gyro_grav(2) = 0.0f;
-            // std::cout << ", d Theta Pred: " << d_theta_grav.norm() << ", Covariance Matrix: " << P.norm() << ", Innovation: " << S.inverse().norm();
         }
         
-        // std::cout << "\n";
     }
 
 
@@ -153,7 +180,6 @@ eskf::State eskf::fuse_sensors(bool new_mag, bool new_baro, bool new_gps) {
         H_mag.setZero();
         filtered_mag_vec = mag_vec_alpha*mag_vec + (1-mag_vec_alpha)*filtered_mag_vec;
         Eigen::Matrix<float,1,3> yaw_grad = Eigen::Matrix<float,1,3>::Zero();
-        // Eigen::Vector3f mag_ned = nom_state.q * mag_vec;
         float xy = pow(filtered_mag_vec(0),2)+pow(filtered_mag_vec(1),2);
         float horiz_min = pow((0.01f*9.80665f),2);
         yaw_grad(0,0) = -filtered_mag_vec(1)/xy;
@@ -172,7 +198,6 @@ eskf::State eskf::fuse_sensors(bool new_mag, bool new_baro, bool new_gps) {
         K_mag.block<3,1>(9,0).setZero();   // acc_b
         K_mag(6) = 0;
         K_mag(7) = 0;
-        // std::cout << K_mag.norm() << "\n";
         // Calculate observed error
         float est_heading = atan2f(
             2.0f * (nom_state.q.w() * nom_state.q.z() + nom_state.q.x() * nom_state.q.y()),
@@ -180,22 +205,17 @@ eskf::State eskf::fuse_sensors(bool new_mag, bool new_baro, bool new_gps) {
         );
         yaw_pred = est_heading;
         // Calculate residual, ensure its wrapped between -pi,pi
-        float y_mag = wrapToPi(mag_heading - est_heading);
+        float y_mag = wrap_to_pi(mag_heading - est_heading);
         if (y_mag > M_PI)  y_mag -= 2.0f * M_PI;
         if (y_mag < -M_PI) y_mag += 2.0f * M_PI;
         float d2 = y_mag*y_mag / S;
         float angle_error = fabsf(mag_heading-est_heading);
-        // std::cout << mag_heading << "," << est_heading << ",";
         if(d2 < 25.0f) {
-        // if(false) {
             mag_used = true;
             std::cout << "Update yaw";
             Eigen::Matrix<float,15,1> error_pred = K_mag*(y_mag);
             // Update Covariance matrix
-            // Eigen::Matrix<float,15,15> old_P = P;
             P = (Eigen::Matrix<float,15,15>::Identity()-K_mag*H_mag)*P*(Eigen::Matrix<float,15,15>::Identity()-K_mag*H_mag).transpose() + K_mag*V_mag*K_mag.transpose();
-            // std::cout << (P-old_P).block<3,3>(6,6) << "\n";
-            // TODO: Make sure covariance matrix is positive definite (with pos eigenvalues, symmetric)
             // Inject observed error into state
             d_theta_mag = error_pred.segment<3>(6);
             if (d_theta_mag.norm() > 1.0f) {
@@ -207,10 +227,8 @@ eskf::State eskf::fuse_sensors(bool new_mag, bool new_baro, bool new_gps) {
             gyro_mag(0) = 0.0f;
             gyro_mag(1) = 0.0f;
         }
-        // std::cout << "\n";
     }
     // Check if there's new GPS and if the yaw is consistent
-    // std::cout << "New GPS: " << new_gps << ". Speed Norm: " << speed_norm << ", cAcc: " << gps_cAcc << "\n";
     if(new_gps && speed_norm > 0.75f && gps_cAcc < 0.2f) {
         gps_yaw_used = true;
         Eigen::Matrix<float,1,15> H_gps_yaw = Eigen::Matrix<float,1,15>::Zero();
@@ -219,13 +237,7 @@ eskf::State eskf::fuse_sensors(bool new_mag, bool new_baro, bool new_gps) {
         // Calculate the Kalman gain of the barometer
         float S = (H_gps_yaw * P * H_gps_yaw.transpose())(0,0) + V_gps_yaw(0,0);
         Eigen::Matrix<float,15,1> K_gps_yaw = P * H_gps_yaw.transpose() / S;
-        // K_baro.segment<3>(12).setZero();
-        // K_baro.segment<3>(6).setZero();
-        // TODO: Figure out what Kalman gains to zero out from ekf2 (probably everything x,y related, q, gyro)
-        float y_gps_yaw = wrapToPi(gps_heading-getYaw());
-        // Make sure that the barometer reading is in reasonable error range, if not don't use it (Disabled for now)
-        // if((S>V_baro(0,0))&& fabs(y_baro) < baro_dev_tol*sqrtf(S)) {
-            // Calculate our observed error of the barometer
+        float y_gps_yaw = wrap_to_pi(gps_heading-get_yaw());
             Eigen::Matrix<float,15,1> error_pred = K_gps_yaw*(y_gps_yaw);
             // Update Covariance matrix
             P = (Eigen::Matrix<float,15,15>::Identity()-K_gps_yaw*H_gps_yaw)*P*(Eigen::Matrix<float,15,15>::Identity()-K_gps_yaw*H_gps_yaw).transpose() + K_gps_yaw*V_gps_yaw*K_gps_yaw.transpose();
@@ -238,7 +250,6 @@ eskf::State eskf::fuse_sensors(bool new_mag, bool new_baro, bool new_gps) {
             gyro_gps = error_pred.segment<3>(12);
             gyro_gps(0) = 0.0f;
             gyro_gps(1) = 0.0f;
-            std::cout << "GPS Correction!" << "\n";
     }
     else {
         gps_yaw_used = false;
@@ -249,19 +260,12 @@ eskf::State eskf::fuse_sensors(bool new_mag, bool new_baro, bool new_gps) {
         Eigen::Quaternionf dq;
         Eigen::Vector3f d_theta_tot = d_theta_mag + d_theta_grav;
         float theta = d_theta_tot.norm();
-        // std::cout << "dtheta: " << d_theta_tot(0) << "," << d_theta_tot(1) << "," << d_theta_tot(2) << "\n";
         if (theta > 1e-5f) {
             dq = Eigen::AngleAxisf(theta, d_theta_tot.normalized());
         } else {
             dq = Eigen::Quaternionf(1, d_theta_tot(0)/2.0f, d_theta_tot(1)/2.0f, d_theta_tot(2)/2.0f);  // first-order
         }
         nom_state.q = (dq * nom_state.q).normalized();
-        // if(gyro_grav.norm() > 0.1f) {
-        //     gyro_grav = gyro_grav.norm()*0.1f;
-        // }
-        // if(gyro_mag.norm() > 0.1f) {
-        //     gyro_mag = gyro_mag.norm()*0.1f;
-        // }
         nom_state.gyro_b = nom_state.gyro_b + gyro_grav + gyro_mag;
     }
     if(d_theta_grav.norm() == 0) {
@@ -291,18 +295,11 @@ eskf::State eskf::fuse_sensors(bool new_mag, bool new_baro, bool new_gps) {
         V_gps(5,5) = gps_sAcc*gps_sAcc;
         // Calculate GPS Kalman Gain
         Eigen::Matrix<float,15,6> K_gps = P * H_gps.transpose() * (H_gps*P*H_gps.transpose()+V_gps).ldlt().solve(Eigen::Matrix<float,6,6>::Identity());
-        // K_gps.block<3,3>(9,0).setZero();   // acc_b
-        // K_gps.block<3,3>(12,0).setZero();  // gyro_b
-        // K_gps.block<3,3>(6,0).setZero();  // orientation
-        // std::cout << K_gps << "\n";
-        // std::cout << K_gps.norm() << "\n";
         Eigen::Matrix<float,6,1> y_gps;
         y_gps.segment<3>(0) = gps_meas.segment<3>(0) - nom_state.p;
         y_gps.segment<3>(3) = gps_meas.segment<3>(3) - nom_state.vel;
         // Calculate observed error
         Eigen::Matrix<float,15,1> error_pred = K_gps*(y_gps);
-        // std::cout << "GPS residual: " << y_gps(0) << ", " << y_gps(1) << ", " << y_gps(2) << ", Gps error prediction: " << error_pred(0) << ", " << error_pred(1) << ", " << error_pred(2) << ", hAcc: "
-        // << gps_hAcc << ", vAcc" << gps_vAcc << ", K Gain Norm: " << K_gps.norm() << "\n";
         // // Update Covariance matrix
         Eigen::Matrix<float,15,15> old_p = P;
         P = (Eigen::Matrix<float,15,15>::Identity()-K_gps*H_gps)*P*(Eigen::Matrix<float,15,15>::Identity()-K_gps*H_gps).transpose() + K_gps*V_gps*K_gps.transpose();
@@ -330,12 +327,7 @@ eskf::State eskf::fuse_sensors(bool new_mag, bool new_baro, bool new_gps) {
         // Calculate the Kalman gain of the barometer
         float S = (H_baro * P * H_baro.transpose())(0,0) + V_baro(0,0);
         Eigen::Matrix<float,15,1> K_baro = P * H_baro.transpose() / S;
-        // K_baro.segment<3>(12).setZero();
-        // K_baro.segment<3>(6).setZero();
-        // TODO: Figure out what Kalman gains to zero out from ekf2 (probably everything x,y related, q, gyro)
         float y_baro = baro_meas-nom_state.p(2);
-        // Make sure that the barometer reading is in reasonable error range, if not don't use it (Disabled for now)
-        // if((S>V_baro(0,0))&& fabs(y_baro) < baro_dev_tol*sqrtf(S)) {
             // Calculate our observed error of the barometer
             Eigen::Matrix<float,15,1> error_pred = K_baro*(y_baro);
             // Update Covariance matrix
@@ -354,7 +346,6 @@ eskf::State eskf::fuse_sensors(bool new_mag, bool new_baro, bool new_gps) {
             nom_state.q = (dq * nom_state.q).normalized();
             nom_state.acc_b = nom_state.acc_b + error_pred.segment<3>(9);
             nom_state.gyro_b = nom_state.gyro_b + error_pred.segment<3>(12);
-        // }
     }
 
     
@@ -362,12 +353,13 @@ eskf::State eskf::fuse_sensors(bool new_mag, bool new_baro, bool new_gps) {
     if (!P.allFinite()) {
         P.setIdentity();
         std::cerr << "WARNING: P corrupted — resetting!\n";
+        return false;
     }
-    return nom_state;
+    return true;
 }
 
 // GETTERS:
-float eskf::getPitch() {
+float eskf::get_pitch() {
     float w = nom_state.q.w();
     float x = nom_state.q.x();
     float y = nom_state.q.y();
@@ -375,7 +367,7 @@ float eskf::getPitch() {
     return asinf(2*(w*y - z*x));
 }
 
-float eskf::getRoll() {
+float eskf::get_roll() {
     float w = nom_state.q.w();
     float x = nom_state.q.x();
     float y = nom_state.q.y();
@@ -384,7 +376,7 @@ float eskf::getRoll() {
 
 }
 
-float eskf::getYaw() {
+float eskf::get_yaw() {
     float w = nom_state.q.w();
     float x = nom_state.q.x();
     float y = nom_state.q.y();
@@ -405,7 +397,7 @@ Eigen::Matrix3f eskf::skewSymmetric(const Eigen::Vector3f& v) {
     return m;
 }
 
-float eskf::wrapToPi(float angle) {
+float eskf::wrap_to_pi(float angle) {
     angle = fmod(angle + M_PI, 2.0f * M_PI);
     if (angle < 0) angle += 2.0f * M_PI;
     return angle - M_PI;

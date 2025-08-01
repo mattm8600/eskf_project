@@ -13,8 +13,8 @@ void printEigen(const Eigen::MatrixBase<Derived>& mat, const std::string& name =
 
 int main() {
     bool first_run = true;
-    fstream FileIn("tri_flight_2.csv");
-    fstream FileOut("tri_flight_2_results.csv");
+    fstream FileIn("tri_flight_3.csv");
+    fstream FileOut("tri_flight_3_results.csv");
     FileOut << "time,x_hat,y_hat,z_hat,Vx_hat,Vy_hat,Vz_hat,ax_hat,ay_hat,az_hat,ax_bias,ay_bias,az_bias,gx_bias,gy_bias,gz_bias,roll,pitch,yaw,est_heading,mag_correction,pr_correction,P_trace,gps_yaw_correction" << std::endl;
     std::string line;
     getline(FileIn, line);
@@ -99,7 +99,16 @@ int main() {
             kf.set_initial_state();
             first_run = false;
         }
-        kf.update(use_baro,use_gps,use_mag,time);
+        if(kf.update(use_baro,use_gps,use_mag,time)) {
+            {
+                kf.predict_state();
+            }
+            {
+                kf.fuse_sensors(use_baro,use_gps, use_mag);
+            }
+        }
+        std::cout << "Time: " << time << "\n";
+        
         FileOut << time;
         for (size_t i = 0; i < 3; ++i) {
             FileOut << ",";

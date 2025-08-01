@@ -131,11 +131,11 @@ for i in range(1, len(time)):
     elif mag_used.iloc[i] == 0 and in_region:
         in_region = False
         end_time = time.iloc[i]
-        axes[2].axvspan(start_time, end_time, color='lightgreen', alpha=0.3)
+        axes[2].axvspan(start_time, end_time, color='gold', alpha=0.3)
 
 # If still in a region at the end of the data
 if in_region:
-    axes[2].axvspan(start_time, time.iloc[-1], color='lightgreen', alpha=0.3)
+    axes[2].axvspan(start_time, time.iloc[-1], color='gold', alpha=0.3)
 
 
 in_region = False
@@ -189,7 +189,7 @@ axes[0][0].plot(input_df["time"], input_df["gps_z"], '.', label="GPS z")
 axes[0][0].plot(input_df["time"], input_df["baro"], '.', label="Baro z")
 
 # Plot 2: GPS Velocity
-axes[0][1].plot(input_df["time"], input_df["gps_veln"], '.', label="GPS Vel N")
+# axes[0][1].plot(input_df["time"], input_df["gps_veln"], '.', label="GPS Vel N")
 axes[0][1].plot(input_df["time"], input_df["gps_vele"], '.', label="GPS Vel E")
 axes[0][1].plot(input_df["time"], input_df["gps_veld"], '.', label="GPS Vel D")
 

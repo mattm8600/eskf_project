@@ -40,3 +40,9 @@
 ## Input Data Descriptions
 - Squareflight
 - Triflight2
+
+## Next Steps
+- Throw errors for the falling: drone flipping, bad covariance trace, large accel/gyro biases, no GPS lock
+- Trim down compile time
+- Make the display have arguments and be useful
+- Add read until eof in main

@@ -68,6 +68,8 @@
         "thread": "cpp",
         "cinttypes": "cpp",
         "typeindex": "cpp",
-        "typeinfo": "cpp"
+        "typeinfo": "cpp",
+        "geometry": "cpp",
+        "hash_map": "cpp"
     }
 }
